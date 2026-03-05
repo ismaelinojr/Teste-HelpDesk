@@ -9,6 +9,7 @@ import {
     X,
     Plus,
     BarChart3,
+    LogOut,
 } from 'lucide-react';
 
 const navItems = [
@@ -28,8 +29,10 @@ function getPageTitle(pathname: string): string {
 
 export default function Layout() {
     const [sidebarOpen, setSidebarOpen] = useState(false);
-    const { currentUser, usuarios, switchUser } = useApp();
+    const { currentUser, logout } = useApp();
     const location = useLocation();
+
+    if (!currentUser) return null;
 
     return (
         <div className="app-layout">
@@ -75,21 +78,11 @@ export default function Layout() {
                 </nav>
 
                 <div className="sidebar-footer">
-                    <div className="user-switch">
-                        <label>Usuário Ativo</label>
-                        <select
-                            value={currentUser.id}
-                            onChange={(e) => switchUser(e.target.value)}
-                        >
-                            {usuarios.map((u) => (
-                                <option key={u.id} value={u.id}>
-                                    {u.nome} ({u.role})
-                                </option>
-                            ))}
-                        </select>
+                    <div className="user-info-footer">
                         <span className={`user-role-badge ${currentUser.role}`}>
                             {currentUser.role}
                         </span>
+                        <div className="user-email-footer">{currentUser.email}</div>
                     </div>
                 </div>
             </aside>
@@ -107,10 +100,19 @@ export default function Layout() {
                 </div>
                 <div className="header-right">
                     <div className="header-user">
-                        <span>{currentUser.nome}</span>
+                        <div className="user-details-header">
+                            <span className="user-name-header">{currentUser.nome}</span>
+                        </div>
                         <div className="header-avatar">
                             {currentUser.nome.split(' ').map(n => n[0]).join('').slice(0, 2)}
                         </div>
+                        <button
+                            className="btn-logout-header"
+                            onClick={logout}
+                            title="Sair do sistema"
+                        >
+                            <LogOut size={18} />
+                        </button>
                     </div>
                 </div>
             </header>
@@ -119,6 +121,43 @@ export default function Layout() {
             <main className="main-content">
                 <Outlet />
             </main>
+
+            <style>{`
+                .user-info-footer {
+                    padding: 10px;
+                    display: flex;
+                    flex-direction: column;
+                    gap: 5px;
+                }
+                .user-email-footer {
+                    font-size: 11px;
+                    color: var(--text-muted);
+                    overflow: hidden;
+                    text-overflow: ellipsis;
+                    white-space: nowrap;
+                }
+                .btn-logout-header {
+                    background: none;
+                    border: none;
+                    color: var(--text-muted);
+                    cursor: pointer;
+                    padding: 8px;
+                    border-radius: 8px;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    transition: all 0.2s;
+                    margin-left: 10px;
+                }
+                .btn-logout-header:hover {
+                    color: #f38ba8;
+                    background: rgba(243, 139, 168, 0.1);
+                }
+                .user-name-header {
+                    font-weight: 500;
+                    font-size: 14px;
+                }
+            `}</style>
         </div>
     );
 }

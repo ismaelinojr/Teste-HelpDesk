@@ -11,13 +11,16 @@ interface AppState {
     usuarios: Usuario[];
     clientes: Cliente[];
     categoriasChamado: CategoriaChamado[];
-    currentUser: Usuario;
+    currentUser: Usuario | null;
+    isAuthenticated: boolean;
     configSLA: ConfigSLA;
     loading: boolean;
 }
 
 interface AppContextType extends AppState {
     switchUser: (userId: string) => void;
+    login: (email: string, password: string) => Promise<boolean>;
+    logout: () => void;
     assumirChamado: (chamadoId: string) => Promise<void>;
     atualizarStatus: (chamadoId: string, status: StatusChamado) => Promise<void>;
     encerrarChamado: (chamadoId: string, solucao: string) => Promise<void>;
@@ -56,7 +59,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         usuarios: [],
         clientes: [],
         categoriasChamado: [],
-        currentUser: { id: 'u1', nome: 'Ismael Silva', role: 'admin', email: 'ismael@helpdesk.com' },
+        currentUser: null,
+        isAuthenticated: false,
         configSLA: defaultConfig,
         loading: true,
     });
@@ -83,18 +87,34 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         }
     }, [state.usuarios]);
 
+    const login = useCallback(async (email: string, _password: string) => {
+        // Simulação de login: busca o usuário pelo e-mail nos mocks
+        const user = state.usuarios.find(u => u.email === email);
+        if (user) {
+            setState(prev => ({ ...prev, currentUser: user, isAuthenticated: true }));
+            return true;
+        }
+        return false;
+    }, [state.usuarios]);
+
+    const logout = useCallback(() => {
+        setState(prev => ({ ...prev, currentUser: null, isAuthenticated: false }));
+    }, []);
+
     const refreshChamados = useCallback(async () => {
         const chamados = await ticketService.getTickets();
         setState(prev => ({ ...prev, chamados }));
     }, []);
 
     const assumirChamado = useCallback(async (chamadoId: string) => {
+        if (!state.currentUser) return;
         await ticketService.assignTechnician(chamadoId, state.currentUser.id);
         await ticketService.addInteracao(chamadoId, state.currentUser.id, `${state.currentUser.nome} assumiu o chamado.`);
         await refreshChamados();
     }, [state.currentUser, refreshChamados]);
 
     const atualizarStatus = useCallback(async (chamadoId: string, status: StatusChamado) => {
+        if (!state.currentUser) return;
         await ticketService.updateTicketStatus(chamadoId, status);
         const labels: Record<StatusChamado, string> = {
             aberto: 'Aberto',
@@ -107,12 +127,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }, [state.currentUser, refreshChamados]);
 
     const encerrarChamado = useCallback(async (chamadoId: string, solucao: string) => {
+        if (!state.currentUser) return;
         await ticketService.closeTicket(chamadoId, solucao);
         await ticketService.addInteracao(chamadoId, state.currentUser.id, `Chamado encerrado. Solução: ${solucao}`);
         await refreshChamados();
     }, [state.currentUser, refreshChamados]);
 
     const adicionarNota = useCallback(async (chamadoId: string, mensagem: string) => {
+        if (!state.currentUser) throw new Error('Usuário não autenticado');
         const interacao = await ticketService.addInteracao(chamadoId, state.currentUser.id, mensagem);
         return interacao;
     }, [state.currentUser]);
@@ -150,6 +172,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }, [state.categoriasChamado]);
 
     const getChamadosFiltrados = useCallback(() => {
+        if (!state.currentUser) return [];
         if (state.currentUser.role === 'admin') return state.chamados;
         return state.chamados.filter(c => c.tecnicoId === state.currentUser.id);
     }, [state.chamados, state.currentUser]);
@@ -243,6 +266,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         <AppContext.Provider value={{
             ...state,
             switchUser,
+            login,
+            logout,
             assumirChamado,
             atualizarStatus,
             encerrarChamado,
