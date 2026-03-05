@@ -112,16 +112,18 @@ const LoginPage: React.FC = () => {
 
                 .input-icon {
                     position: absolute;
-                    left: 14px;
-                    color: #6c7086;
+                    left: 16px;
+                    color: #9399b2;
+                    pointer-events: none;
+                    z-index: 10;
                 }
 
                 .login-input {
                     width: 100%;
-                    background: rgba(0, 0, 0, 0.2);
+                    background: rgba(255, 255, 255, 0.05);
                     border: 1px solid rgba(255, 255, 255, 0.1);
                     border-radius: 12px;
-                    padding: 12px 12px 12px 42px;
+                    padding: 14px 16px 14px 48px;
                     color: #cdd6f4;
                     font-size: 15px;
                     transition: all 0.2s;
@@ -130,7 +132,7 @@ const LoginPage: React.FC = () => {
                 .login-input:focus {
                     outline: none;
                     border-color: #89b4fa;
-                    background: rgba(0, 0, 0, 0.3);
+                    background: rgba(255, 255, 255, 0.08);
                     box-shadow: 0 0 0 4px rgba(137, 180, 250, 0.1);
                 }
 
