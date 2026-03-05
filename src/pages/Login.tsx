@@ -110,29 +110,33 @@ const LoginPage: React.FC = () => {
                     align-items: center;
                 }
 
-                .input-icon {
+                .input-wrapper .input-icon {
                     position: absolute;
                     left: 16px;
-                    color: #9399b2;
+                    color: #89b4fa;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
                     pointer-events: none;
                     z-index: 10;
                 }
 
-                .login-input {
+                input.login-input {
                     width: 100%;
-                    background: rgba(255, 255, 255, 0.05);
-                    border: 1px solid rgba(255, 255, 255, 0.1);
+                    background: rgba(255, 255, 255, 0.07) !important;
+                    border: 1px solid rgba(255, 255, 255, 0.1) !important;
                     border-radius: 12px;
-                    padding: 14px 16px 14px 48px;
-                    color: #cdd6f4;
+                    padding: 14px 16px 14px 48px !important;
+                    color: #cdd6f4 !important;
                     font-size: 15px;
                     transition: all 0.2s;
+                    height: 52px;
                 }
 
-                .login-input:focus {
+                input.login-input:focus {
                     outline: none;
-                    border-color: #89b4fa;
-                    background: rgba(255, 255, 255, 0.08);
+                    border-color: #89b4fa !important;
+                    background: rgba(255, 255, 255, 0.12) !important;
                     box-shadow: 0 0 0 4px rgba(137, 180, 250, 0.1);
                 }
 
