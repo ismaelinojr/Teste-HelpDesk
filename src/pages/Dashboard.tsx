@@ -7,21 +7,11 @@ import {
     Clock,
     AlertTriangle,
     Hourglass,
+    Code,
     Plus,
     ChevronDown,
     Check,
 } from 'lucide-react';
-import type { StatusChamado } from '../types';
-
-const allStatuses: StatusChamado[] = ['aberto', 'em_atendimento', 'aguardando_cliente', 'fechado'];
-const defaultStatuses: StatusChamado[] = ['aberto', 'em_atendimento', 'aguardando_cliente'];
-
-const statusLabels: Record<StatusChamado, string> = {
-    aberto: 'Aberto',
-    em_atendimento: 'Em Atendimento',
-    aguardando_cliente: 'Aguardando Cliente',
-    fechado: 'Fechado',
-};
 
 export default function Dashboard() {
     const {
@@ -32,16 +22,38 @@ export default function Dashboard() {
         getClienteNome,
         getTecnicoNome,
         getChamadosFiltrados,
+        getStatusLabel,
+        getSLALabel,
+        statusConfigs,
+        slaConfigs,
         usuarios,
     } = useApp();
 
     const navigate = useNavigate();
 
-    const [filterStatus, setFilterStatus] = useState<Set<StatusChamado>>(() => new Set(defaultStatuses));
+    // Build allStatuses and defaultStatuses from dynamic configs
+    const allStatuses = useMemo(() =>
+        statusConfigs.map(s => s.id),
+        [statusConfigs]);
+
+    const defaultStatuses = useMemo(() =>
+        statusConfigs.filter(s => s.id !== 'fechado').map(s => s.id),
+        [statusConfigs]);
+
+    const [filterStatus, setFilterStatus] = useState<Set<string>>(() => new Set());
     const [statusDropdownOpen, setStatusDropdownOpen] = useState(false);
     const statusDropdownRef = useRef<HTMLDivElement>(null);
     const [filterPrioridade, setFilterPrioridade] = useState<string>('todos');
     const [filterTecnico, setFilterTecnico] = useState<string>('todos');
+    const [initialized, setInitialized] = useState(false);
+
+    // Initialize filterStatus when statusConfigs load
+    useEffect(() => {
+        if (statusConfigs.length > 0 && !initialized) {
+            setFilterStatus(new Set(defaultStatuses));
+            setInitialized(true);
+        }
+    }, [statusConfigs, defaultStatuses, initialized]);
 
     // Close dropdown on outside click
     useEffect(() => {
@@ -54,7 +66,7 @@ export default function Dashboard() {
         return () => document.removeEventListener('mousedown', handleClickOutside);
     }, []);
 
-    const toggleStatus = (status: StatusChamado) => {
+    const toggleStatus = (status: string) => {
         setFilterStatus(prev => {
             const next = new Set(prev);
             if (next.has(status)) {
@@ -73,9 +85,12 @@ export default function Dashboard() {
             : `${filterStatus.size} status selecionado${filterStatus.size > 1 ? 's' : ''}`;
 
     const baseChamados = getChamadosFiltrados();
+
+    // Dynamic stat counts
     const chamadosAbertos = chamados.filter(c => c.status === 'aberto');
     const chamadosEmAtendimento = chamados.filter(c => c.status === 'em_atendimento');
     const chamadosAguardando = chamados.filter(c => c.status === 'aguardando_cliente');
+    const chamadosProgramacao = chamados.filter(c => c.status === 'programacao');
     const chamadosSLAVencido = chamados
         .filter(c => c.status !== 'fechado')
         .filter(c => calcularSLA(c).status === 'vencido');
@@ -100,8 +115,8 @@ export default function Dashboard() {
 
     return (
         <div>
-            {/* Stats */}
-            <div className="stats-grid">
+            {/* Stats - 5 cards */}
+            <div className="stats-grid stats-grid-5">
                 <div className="stat-card">
                     <div className="stat-icon blue"><AlertCircle size={24} /></div>
                     <div className="stat-info">
@@ -117,17 +132,24 @@ export default function Dashboard() {
                     </div>
                 </div>
                 <div className="stat-card">
+                    <div className="stat-icon yellow"><Hourglass size={24} /></div>
+                    <div className="stat-info">
+                        <h3>{chamadosAguardando.length}</h3>
+                        <p>Aguardando Cliente</p>
+                    </div>
+                </div>
+                <div className="stat-card">
+                    <div className="stat-icon purple"><Code size={24} /></div>
+                    <div className="stat-info">
+                        <h3>{chamadosProgramacao.length}</h3>
+                        <p>Programação</p>
+                    </div>
+                </div>
+                <div className="stat-card">
                     <div className="stat-icon red"><AlertTriangle size={24} /></div>
                     <div className="stat-info">
                         <h3>{chamadosSLAVencido.length}</h3>
                         <p>SLA Vencido</p>
-                    </div>
-                </div>
-                <div className="stat-card">
-                    <div className="stat-icon purple"><Hourglass size={24} /></div>
-                    <div className="stat-info">
-                        <h3>{chamadosAguardando.length}</h3>
-                        <p>Aguardando Cliente</p>
                     </div>
                 </div>
             </div>
@@ -156,7 +178,7 @@ export default function Dashboard() {
                                         onChange={() => toggleStatus(s)}
                                         className="sr-only"
                                     />
-                                    <span className={`badge badge-${s}`}>{statusLabels[s]}</span>
+                                    <span className={`badge badge-${s}`}>{getStatusLabel(s)}</span>
                                 </label>
                             ))}
                         </div>
@@ -169,11 +191,12 @@ export default function Dashboard() {
                     onChange={e => setFilterPrioridade(e.target.value)}
                 >
                     <option value="todos">Todas as Prioridades</option>
-                    <option value="normal">Normal</option>
-                    <option value="urgente">Urgente</option>
+                    {slaConfigs.map(sla => (
+                        <option key={sla.id} value={sla.id}>{sla.nome}</option>
+                    ))}
                 </select>
 
-                {currentUser.role === 'admin' && (
+                {currentUser!.role === 'admin' && (
                     <select
                         className="filter-select"
                         value={filterTecnico}
@@ -219,12 +242,12 @@ export default function Dashboard() {
                                         <td className="td-cliente">{getClienteNome(chamado.clienteId)}</td>
                                         <td>
                                             <span className={`badge badge-${chamado.status}`}>
-                                                {statusLabels[chamado.status]}
+                                                {getStatusLabel(chamado.status)}
                                             </span>
                                         </td>
                                         <td>
                                             <span className={`badge badge-${chamado.prioridade}`}>
-                                                {chamado.prioridade === 'urgente' ? '🔥 Urgente' : 'Normal'}
+                                                {chamado.prioridade === 'urgente' ? '🔥 ' : ''}{getSLALabel(chamado.prioridade)}
                                             </span>
                                         </td>
                                         <td>{getTecnicoNome(chamado.tecnicoId)}</td>
@@ -277,13 +300,13 @@ export default function Dashboard() {
                             <div className="mobile-card-header">
                                 <span className="mobile-card-title">{chamado.titulo}</span>
                                 <span className={`badge badge-${chamado.prioridade}`}>
-                                    {chamado.prioridade === 'urgente' ? '🔥' : 'N'}
+                                    {chamado.prioridade === 'urgente' ? '🔥' : getSLALabel(chamado.prioridade).charAt(0)}
                                 </span>
                             </div>
                             <div className="mobile-card-row">
                                 <span>{getClienteNome(chamado.clienteId)}</span>
                                 <span className={`badge badge-${chamado.status}`}>
-                                    {statusLabels[chamado.status]}
+                                    {getStatusLabel(chamado.status)}
                                 </span>
                             </div>
                             <div className="mobile-card-row">

@@ -1,5 +1,5 @@
 import type { Chamado, Interacao, StatusChamado } from '../types';
-import { chamados as mockChamados, interacoes as mockInteracoes, configSLA } from '../mocks/mockData';
+import { chamados as mockChamados, interacoes as mockInteracoes } from '../mocks/mockData';
 
 // Cópia mutável dos dados mock
 let chamados = [...mockChamados];
@@ -89,7 +89,7 @@ export async function createTicket(data: Omit<Chamado, 'id' | 'dataAbertura' | '
     const newTicket: Chamado = {
         ...data,
         id: `ch${chamados.length + 1}`,
-        slaHoras: data.prioridade === 'urgente' ? configSLA.urgente : configSLA.normal,
+        slaHoras: data.slaHoras,
         dataAbertura: new Date().toISOString(),
         dataInicio: null,
         dataFechamento: null,

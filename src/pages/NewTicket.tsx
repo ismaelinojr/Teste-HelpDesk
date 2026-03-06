@@ -5,7 +5,7 @@ import type { Prioridade, ContatoCliente } from '../types';
 import { ArrowLeft, Save } from 'lucide-react';
 
 export default function NewTicket() {
-    const { clientes, criarChamado, getContatosByCliente, addContato, categoriasChamado } = useApp();
+    const { clientes, criarChamado, getContatosByCliente, addContato, categoriasChamado, slaConfigs } = useApp();
     const navigate = useNavigate();
 
     const [clienteId, setClienteId] = useState('');
@@ -134,10 +134,13 @@ export default function NewTicket() {
                     </div>
 
                     <div className="form-group">
-                        <label>Prioridade</label>
+                        <label>Prioridade / SLA</label>
                         <select value={prioridade} onChange={(e) => setPrioridade(e.target.value as Prioridade)}>
-                            <option value="normal">📋 Normal (24h)</option>
-                            <option value="urgente">🔥 Urgente (4h)</option>
+                            {slaConfigs.map(sla => (
+                                <option key={sla.id} value={sla.id}>
+                                    {sla.nome} ({sla.horas}h)
+                                </option>
+                            ))}
                         </select>
                     </div>
 

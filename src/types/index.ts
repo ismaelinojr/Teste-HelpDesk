@@ -1,8 +1,27 @@
 // Tipos principais do sistema I9Chamados
 
-export type StatusChamado = 'aberto' | 'em_atendimento' | 'aguardando_cliente' | 'fechado';
-export type Prioridade = 'normal' | 'urgente';
+export type StatusChamado = string;
+export type Prioridade = string;
 export type Role = 'admin' | 'tecnico';
+
+// Configuração dinâmica de Status
+export interface StatusConfig {
+  id: string;
+  nome: string;
+  cor: string;
+  icone: string;
+  ordem: number;
+  ativo?: boolean;
+}
+
+// Configuração dinâmica de SLA/Prioridade
+export interface SLAConfig {
+  id: string;
+  nome: string;
+  horas: number;
+  cor: string;
+  ativo?: boolean;
+}
 
 export interface Usuario {
   id: string;
@@ -61,11 +80,6 @@ export interface Interacao {
   usuarioId: string;
   mensagem: string;
   createdAt: string;
-}
-
-export interface ConfigSLA {
-  urgente: number;
-  normal: number;
 }
 
 export type SLAStatus = 'ok' | 'atencao' | 'vencido';

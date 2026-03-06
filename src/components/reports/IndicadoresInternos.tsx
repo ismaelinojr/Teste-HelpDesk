@@ -4,7 +4,7 @@ import { TicketCheck, Clock, CheckCircle2, AlertTriangle, Users } from 'lucide-r
 import type { Chamado } from '../../types';
 
 export default function IndicadoresInternos() {
-    const { chamados, categoriasChamado, clientes, usuarios, configSLA } = useApp();
+    const { chamados, categoriasChamado, clientes, usuarios } = useApp();
 
     const stats = useMemo(() => {
         const total = chamados.length;

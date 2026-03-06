@@ -1,10 +1,20 @@
-import type { Usuario, Cliente, Chamado, Interacao, ConfigSLA, ContatoCliente, CategoriaChamado } from '../types';
+import type { Usuario, Cliente, Chamado, Interacao, ContatoCliente, CategoriaChamado, StatusConfig, SLAConfig } from '../types';
 
-// ===== CONFIGURAÇÃO SLA =====
-export const configSLA: ConfigSLA = {
-    urgente: 4,
-    normal: 24,
-};
+// ===== CONFIGURAÇÃO DE STATUS =====
+export let statusConfigs: StatusConfig[] = [
+    { id: 'aberto', nome: 'Aberto', cor: '#3b82f6', icone: 'AlertCircle', ordem: 1, ativo: true },
+    { id: 'em_atendimento', nome: 'Em Atendimento', cor: '#f97316', icone: 'Clock', ordem: 2, ativo: true },
+    { id: 'aguardando_cliente', nome: 'Aguardando Cliente', cor: '#FF9F43', icone: 'Hourglass', ordem: 3, ativo: true },
+    { id: 'programacao', nome: 'Programação', cor: '#8E7CFF', icone: 'Code', ordem: 4, ativo: true },
+    { id: 'fechado', nome: 'Fechado', cor: '#2ED37D', icone: 'CheckCircle', ordem: 5, ativo: true },
+];
+
+// ===== CONFIGURAÇÃO DE SLA =====
+export let slaConfigs: SLAConfig[] = [
+    { id: 'urgente', nome: 'Urgente', horas: 4, cor: '#FF4D4D', ativo: true },
+    { id: 'normal', nome: 'Normal', horas: 24, cor: '#3b82f6', ativo: true },
+    { id: 'programacao', nome: 'Programação', horas: 72, cor: '#8E7CFF', ativo: true },
+];
 
 // ===== USUÁRIOS (Técnicos e Admin) =====
 export let usuarios: Usuario[] = [
@@ -161,6 +171,19 @@ export const chamados: Chamado[] = [
         status: 'fechado', prioridade: 'normal', tecnicoId: 'u3',
         slaHoras: 24, dataAbertura: h(120), dataInicio: h(118), dataFechamento: h(115), solucaoFinal: 'Cabo de rede substituído, câmera reconfigurada no DVR.',
     },
+    // Chamados de Programação
+    {
+        id: 'ch16', clienteId: 'c4', contatoNome: 'Dr. Lima', categoriaId: 'cat2', titulo: 'Novo relatório de hemograma',
+        descricao: 'Desenvolver novo modelo de relatório para exames de hemograma completo com layout personalizado.',
+        status: 'programacao', prioridade: 'programacao', tecnicoId: 'u2',
+        slaHoras: 72, dataAbertura: h(48), dataInicio: h(46), dataFechamento: null, solucaoFinal: null,
+    },
+    {
+        id: 'ch17', clienteId: 'c6', contatoNome: 'Paula', categoriaId: 'cat2', titulo: 'Integração com API do convênio',
+        descricao: 'Implementar integração automática com a API do convênio para envio de resultados.',
+        status: 'programacao', prioridade: 'programacao', tecnicoId: 'u3',
+        slaHoras: 72, dataAbertura: h(24), dataInicio: h(22), dataFechamento: null, solucaoFinal: null,
+    },
 ];
 
 // ===== INTERAÇÕES =====
@@ -185,4 +208,6 @@ export const interacoes: Interacao[] = [
     { id: 'i18', chamadoId: 'ch13', usuarioId: 'u2', mensagem: 'Renovando licença no portal do fabricante.', createdAt: h(90) },
     { id: 'i19', chamadoId: 'ch13', usuarioId: 'u2', mensagem: 'Licença ativada. Executando atualização remota em lote.', createdAt: h(87) },
     { id: 'i20', chamadoId: 'ch13', usuarioId: 'u2', mensagem: 'Todas as 8 máquinas atualizadas e verificadas.', createdAt: h(85) },
+    { id: 'i21', chamadoId: 'ch16', usuarioId: 'u2', mensagem: 'Iniciando análise dos requisitos do novo modelo de relatório.', createdAt: h(46) },
+    { id: 'i22', chamadoId: 'ch17', usuarioId: 'u3', mensagem: 'Estudando documentação da API do convênio.', createdAt: h(22) },
 ];

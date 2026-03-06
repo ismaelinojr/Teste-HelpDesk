@@ -1,19 +1,21 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import type { Chamado, Usuario, Cliente, Interacao, ConfigSLA, StatusChamado, ContatoCliente, CategoriaChamado } from '../types';
+import type { Chamado, Usuario, Cliente, Interacao, StatusChamado, ContatoCliente, CategoriaChamado, StatusConfig, SLAConfig } from '../types';
 import * as ticketService from '../services/ticketService';
 import * as clientService from '../services/clientService';
 import * as userService from '../services/userService';
 import * as categoryService from '../services/categoryService';
-import { configSLA as defaultConfig } from '../mocks/mockData';
+import * as statusService from '../services/statusService';
+import * as slaService from '../services/slaService';
 
 interface AppState {
     chamados: Chamado[];
     usuarios: Usuario[];
     clientes: Cliente[];
     categoriasChamado: CategoriaChamado[];
+    statusConfigs: StatusConfig[];
+    slaConfigs: SLAConfig[];
     currentUser: Usuario | null;
     isAuthenticated: boolean;
-    configSLA: ConfigSLA;
     loading: boolean;
 }
 
@@ -26,12 +28,15 @@ interface AppContextType extends AppState {
     encerrarChamado: (chamadoId: string, solucao: string) => Promise<void>;
     adicionarNota: (chamadoId: string, mensagem: string) => Promise<Interacao>;
     getInteracoes: (chamadoId: string) => Promise<Interacao[]>;
-    criarChamado: (data: { clienteId: string; contatoNome?: string; categoriaId: string; titulo: string; descricao: string; prioridade: 'normal' | 'urgente' }) => Promise<void>;
-    atualizarConfigSLA: (config: ConfigSLA) => void;
+    criarChamado: (data: { clienteId: string; contatoNome?: string; categoriaId: string; titulo: string; descricao: string; prioridade: string }) => Promise<void>;
     refreshChamados: () => Promise<void>;
     getClienteNome: (id: string) => string;
     getTecnicoNome: (id: string | null) => string;
     getCategoriaNome: (id: string) => string;
+    getStatusLabel: (id: string) => string;
+    getStatusConfig: (id: string) => StatusConfig | undefined;
+    getSLAConfig: (id: string) => SLAConfig | undefined;
+    getSLALabel: (id: string) => string;
     getChamadosFiltrados: () => Chamado[];
     getContatosByCliente: (clienteId: string) => Promise<ContatoCliente[]>;
     addContato: (clienteId: string, nome: string, telefone?: string, email?: string, funcao?: string) => Promise<ContatoCliente>;
@@ -49,6 +54,14 @@ interface AppContextType extends AppState {
     addCategoria: (categoria: Omit<CategoriaChamado, 'id'>) => Promise<CategoriaChamado>;
     updateCategoria: (id: string, data: Partial<CategoriaChamado>) => Promise<CategoriaChamado>;
     deleteCategoria: (id: string) => Promise<void>;
+
+    addStatus: (status: Omit<StatusConfig, 'id'>) => Promise<StatusConfig>;
+    updateStatus: (id: string, data: Partial<StatusConfig>) => Promise<StatusConfig>;
+    deleteStatus: (id: string) => Promise<void>;
+
+    addSLA: (sla: Omit<SLAConfig, 'id'>) => Promise<SLAConfig>;
+    updateSLA: (id: string, data: Partial<SLAConfig>) => Promise<SLAConfig>;
+    deleteSLA: (id: string) => Promise<void>;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -59,21 +72,33 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         usuarios: [],
         clientes: [],
         categoriasChamado: [],
+        statusConfigs: [],
+        slaConfigs: [],
         currentUser: null,
         isAuthenticated: false,
-        configSLA: defaultConfig,
         loading: true,
     });
 
     const loadData = useCallback(async () => {
         setState(prev => ({ ...prev, loading: true }));
-        const [chamados, usuarios, clientes, categorias] = await Promise.all([
+        const [chamados, usuarios, clientes, categorias, statuses, slas] = await Promise.all([
             ticketService.getTickets(),
             userService.getUsers(),
             clientService.getClients(),
             categoryService.getCategorias(),
+            statusService.getStatuses(),
+            slaService.getSLAs(),
         ]);
-        setState(prev => ({ ...prev, chamados, usuarios, clientes, categoriasChamado: categorias, loading: false }));
+        setState(prev => ({
+            ...prev,
+            chamados,
+            usuarios,
+            clientes,
+            categoriasChamado: categorias,
+            statusConfigs: statuses,
+            slaConfigs: slas,
+            loading: false,
+        }));
     }, []);
 
     useEffect(() => {
@@ -88,7 +113,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }, [state.usuarios]);
 
     const login = useCallback(async (email: string, _password: string) => {
-        // Simulação de login: busca o usuário pelo e-mail nos mocks
         const user = state.usuarios.find(u => u.email === email);
         if (user) {
             setState(prev => ({ ...prev, currentUser: user, isAuthenticated: true }));
@@ -116,15 +140,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     const atualizarStatus = useCallback(async (chamadoId: string, status: StatusChamado) => {
         if (!state.currentUser) return;
         await ticketService.updateTicketStatus(chamadoId, status);
-        const labels: Record<StatusChamado, string> = {
-            aberto: 'Aberto',
-            em_atendimento: 'Em Atendimento',
-            aguardando_cliente: 'Aguardando Cliente',
-            fechado: 'Fechado',
-        };
-        await ticketService.addInteracao(chamadoId, state.currentUser.id, `Status alterado para: ${labels[status]}`);
+        const statusConfig = state.statusConfigs.find(s => s.id === status);
+        const label = statusConfig?.nome || status;
+        await ticketService.addInteracao(chamadoId, state.currentUser.id, `Status alterado para: ${label}`);
         await refreshChamados();
-    }, [state.currentUser, refreshChamados]);
+    }, [state.currentUser, state.statusConfigs, refreshChamados]);
 
     const encerrarChamado = useCallback(async (chamadoId: string, solucao: string) => {
         if (!state.currentUser) return;
@@ -143,8 +163,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         return ticketService.getInteracoes(chamadoId);
     }, []);
 
-    const criarChamado = useCallback(async (data: { clienteId: string; contatoNome?: string; categoriaId: string; titulo: string; descricao: string; prioridade: 'normal' | 'urgente' }) => {
-        const slaHoras = data.prioridade === 'urgente' ? state.configSLA.urgente : state.configSLA.normal;
+    const criarChamado = useCallback(async (data: { clienteId: string; contatoNome?: string; categoriaId: string; titulo: string; descricao: string; prioridade: string }) => {
+        const slaConfig = state.slaConfigs.find(s => s.id === data.prioridade);
+        const slaHoras = slaConfig?.horas || 24;
         await ticketService.createTicket({
             ...data,
             status: 'aberto',
@@ -152,11 +173,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             slaHoras,
         });
         await refreshChamados();
-    }, [state.configSLA, refreshChamados]);
-
-    const atualizarConfigSLA = useCallback((config: ConfigSLA) => {
-        setState(prev => ({ ...prev, configSLA: config }));
-    }, []);
+    }, [state.slaConfigs, refreshChamados]);
 
     const getClienteNome = useCallback((id: string) => {
         return state.clientes.find(c => c.id === id)?.nome || 'Desconhecido';
@@ -171,10 +188,26 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         return state.categoriasChamado.find(c => c.id === id)?.nome || 'Desconhecido';
     }, [state.categoriasChamado]);
 
+    const getStatusLabel = useCallback((id: string) => {
+        return state.statusConfigs.find(s => s.id === id)?.nome || id;
+    }, [state.statusConfigs]);
+
+    const getStatusConfig = useCallback((id: string) => {
+        return state.statusConfigs.find(s => s.id === id);
+    }, [state.statusConfigs]);
+
+    const getSLAConfig = useCallback((id: string) => {
+        return state.slaConfigs.find(s => s.id === id);
+    }, [state.slaConfigs]);
+
+    const getSLALabel = useCallback((id: string) => {
+        return state.slaConfigs.find(s => s.id === id)?.nome || id;
+    }, [state.slaConfigs]);
+
     const getChamadosFiltrados = useCallback(() => {
         if (!state.currentUser) return [];
         if (state.currentUser.role === 'admin') return state.chamados;
-        return state.chamados.filter(c => c.tecnicoId === state.currentUser.id);
+        return state.chamados.filter(c => c.tecnicoId === state.currentUser!.id);
     }, [state.chamados, state.currentUser]);
 
     const getContatosByCliente = useCallback(async (clienteId: string) => {
@@ -212,7 +245,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         await clientService.deleteCliente(id);
         setState(prev => ({
             ...prev,
-            clientes: prev.clientes.filter(c => c.id !== id) // removemos da lista visualmente
+            clientes: prev.clientes.filter(c => c.id !== id)
         }));
     }, []);
 
@@ -262,6 +295,54 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         }));
     }, []);
 
+    // ===== STATUS CRUD =====
+    const addStatus = useCallback(async (status: Omit<StatusConfig, 'id'>) => {
+        const novo = await statusService.addStatus(status);
+        setState(prev => ({ ...prev, statusConfigs: [...prev.statusConfigs, novo] }));
+        return novo;
+    }, []);
+
+    const updateStatus = useCallback(async (id: string, data: Partial<StatusConfig>) => {
+        const atualizado = await statusService.updateStatus(id, data);
+        setState(prev => ({
+            ...prev,
+            statusConfigs: prev.statusConfigs.map(s => s.id === id ? atualizado : s)
+        }));
+        return atualizado;
+    }, []);
+
+    const deleteStatus = useCallback(async (id: string) => {
+        await statusService.deleteStatus(id);
+        setState(prev => ({
+            ...prev,
+            statusConfigs: prev.statusConfigs.filter(s => s.id !== id)
+        }));
+    }, []);
+
+    // ===== SLA CRUD =====
+    const addSLA = useCallback(async (sla: Omit<SLAConfig, 'id'>) => {
+        const novo = await slaService.addSLA(sla);
+        setState(prev => ({ ...prev, slaConfigs: [...prev.slaConfigs, novo] }));
+        return novo;
+    }, []);
+
+    const updateSLA = useCallback(async (id: string, data: Partial<SLAConfig>) => {
+        const atualizado = await slaService.updateSLA(id, data);
+        setState(prev => ({
+            ...prev,
+            slaConfigs: prev.slaConfigs.map(s => s.id === id ? atualizado : s)
+        }));
+        return atualizado;
+    }, []);
+
+    const deleteSLA = useCallback(async (id: string) => {
+        await slaService.deleteSLA(id);
+        setState(prev => ({
+            ...prev,
+            slaConfigs: prev.slaConfigs.filter(s => s.id !== id)
+        }));
+    }, []);
+
     return (
         <AppContext.Provider value={{
             ...state,
@@ -274,11 +355,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             adicionarNota,
             getInteracoes,
             criarChamado,
-            atualizarConfigSLA,
             refreshChamados,
             getClienteNome,
             getTecnicoNome,
             getCategoriaNome,
+            getStatusLabel,
+            getStatusConfig,
+            getSLAConfig,
+            getSLALabel,
             getChamadosFiltrados,
             getContatosByCliente,
             addContato,
@@ -293,6 +377,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             addCategoria,
             updateCategoria,
             deleteCategoria,
+            addStatus,
+            updateStatus,
+            deleteStatus,
+            addSLA,
+            updateSLA,
+            deleteSLA,
         }}>
             {children}
         </AppContext.Provider>
