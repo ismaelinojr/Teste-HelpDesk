@@ -1,28 +1,70 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import { useApp } from '../../context/AppContext';
-import { TicketCheck, Clock, AlertTriangle, Users } from 'lucide-react';
+import { TicketCheck, Clock, AlertTriangle, Users, Calendar } from 'lucide-react';
 
 export default function IndicadoresInternos() {
     const { chamados, categoriasChamado, clientes, usuarios } = useApp();
 
+    // Filtro de Datas padrão: Mês atual
+    const [dataInicio, setDataInicio] = useState(() => {
+        const hoje = new Date();
+        const primeiroDia = new Date(hoje.getFullYear(), hoje.getMonth(), 1);
+        return primeiroDia.toISOString().split('T')[0];
+    });
+
+    const [dataFim, setDataFim] = useState(() => {
+        const hoje = new Date();
+        const ultimoDia = new Date(hoje.getFullYear(), hoje.getMonth() + 1, 0);
+        return ultimoDia.toISOString().split('T')[0];
+    });
+
     const stats = useMemo(() => {
-        const total = chamados.length;
-        const abertos = chamados.filter(c => c.status !== 'fechado').length;
-        const fechados = chamados.filter(c => c.status === 'fechado').length;
+        // Filtra os chamados pelo período selecionado
+        const chamadosFiltrados = chamados.filter(c => {
+            if (!dataInicio && !dataFim) return true;
+
+            const dataAbertura = new Date(c.dataAbertura);
+            // Zera a hora para comparação de apenas datas
+            dataAbertura.setHours(0, 0, 0, 0);
+
+            let inicioValido = true;
+            let fimValido = true;
+
+            if (dataInicio) {
+                const inicioDate = new Date(dataInicio);
+                // Evita problemas de fuso horário ao criar a data local a partir do input string
+                inicioDate.setUTCHours(0, 0, 0, 0);
+                inicioValido = dataAbertura.getTime() >= inicioDate.getTime();
+            }
+
+            if (dataFim) {
+                const fimDate = new Date(dataFim);
+                fimDate.setUTCHours(0, 0, 0, 0);
+                // Adiciona 1 dia para que a data final seja inclusiva (até o final daquele dia)
+                const endTime = fimDate.getTime() + (24 * 60 * 60 * 1000) - 1;
+                fimValido = dataAbertura.getTime() <= endTime;
+            }
+
+            return inicioValido && fimValido;
+        });
+
+        const total = chamadosFiltrados.length;
+        const abertos = chamadosFiltrados.filter(c => c.status !== 'fechado').length;
+        const fechados = chamadosFiltrados.filter(c => c.status === 'fechado').length;
 
         // Separação por região (via lookup de cliente)
-        const totalSul = chamados.filter(c => {
+        const totalSul = chamadosFiltrados.filter(c => {
             const cliente = clientes.find(cli => cli.id === c.clienteId);
             return cliente?.regiao === 'Sul';
         }).length;
 
-        const totalNorte = chamados.filter(c => {
+        const totalNorte = chamadosFiltrados.filter(c => {
             const cliente = clientes.find(cli => cli.id === c.clienteId);
             return cliente?.regiao === 'Norte';
         }).length;
 
         // SLA Violation
-        const violados = chamados.filter(c => {
+        const violados = chamadosFiltrados.filter(c => {
             if (c.status === 'fechado' && c.dataFechamento) {
                 const abertura = new Date(c.dataAbertura).getTime();
                 const fechamento = new Date(c.dataFechamento).getTime();
@@ -34,9 +76,10 @@ export default function IndicadoresInternos() {
 
         // Rankings
         const byClientInfo = clientes.map(cli => ({
+            id: cli.id,
             nome: cli.nome,
             regiao: cli.regiao || 'Não def.',
-            count: chamados.filter(ch => ch.clienteId === cli.id).length
+            count: chamadosFiltrados.filter(ch => ch.clienteId === cli.id).length
         }));
 
         const byClient = [...byClientInfo].sort((a, b) => b.count - a.count).slice(0, 5);
@@ -45,22 +88,42 @@ export default function IndicadoresInternos() {
 
         const byCategoria = categoriasChamado.map(cat => ({
             nome: cat.nome,
-            count: chamados.filter(ch => ch.categoriaId === cat.id).length
+            count: chamadosFiltrados.filter(ch => ch.categoriaId === cat.id).length
         })).sort((a, b) => b.count - a.count);
 
         const byTecnico = usuarios.filter(u => u.role === 'tecnico').map(tec => ({
             nome: tec.nome,
-            count: chamados.filter(ch => ch.tecnicoId === tec.id && ch.status === 'fechado').length
+            count: chamadosFiltrados.filter(ch => ch.tecnicoId === tec.id && ch.status === 'fechado').length
         })).sort((a, b) => b.count - a.count);
 
-        // Agrupa por colaborador que abriu o chamado (usando o contatoNome ou 'Usuário do Laboratório')
-        const contatosMap = new Map<string, number>();
-        chamados.forEach(c => {
+        // Agrupa por colaborador que abriu o chamado (usando o contatoNome + ID do cliente para saber a região)
+        // Usamos um identificador composto para evitar sobreposição de nomes de Labs diferentes
+        // Identificador: "Nome do Contato|ID do Cliente"
+        const contatosMap = new Map<string, { nome: string; clienteId: string; count: number }>();
+        chamadosFiltrados.forEach(c => {
             const nomeContato = c.contatoNome || 'Não Identificado';
-            contatosMap.set(nomeContato, (contatosMap.get(nomeContato) || 0) + 1);
+            const clientIdString = c.clienteId || 'sem_id';
+            const compositeKey = `${nomeContato}|${clientIdString}`;
+
+            if (!contatosMap.has(compositeKey)) {
+                contatosMap.set(compositeKey, { nome: nomeContato, clienteId: clientIdString, count: 0 });
+            }
+            const data = contatosMap.get(compositeKey);
+            if (data) {
+                data.count += 1;
+            }
         });
-        const byContato = Array.from(contatosMap.entries())
-            .map(([nome, count]) => ({ nome, count }))
+
+        const byContato = Array.from(contatosMap.values())
+            .map(item => {
+                const clienteInfo = clientes.find(cli => cli.id === item.clienteId);
+                return {
+                    nome: item.nome,
+                    count: item.count,
+                    labNome: clienteInfo ? clienteInfo.nome : 'Laboratório Desconhecido',
+                    labRegiao: clienteInfo ? clienteInfo.regiao : undefined
+                };
+            })
             .sort((a, b) => b.count - a.count)
             .slice(0, 5);
 
@@ -70,15 +133,104 @@ export default function IndicadoresInternos() {
             byClient, byClientSul, byClientNorte,
             byCategoria, byTecnico, byContato
         };
-    }, [chamados, clientes, categoriasChamado, usuarios]);
+    }, [chamados, clientes, categoriasChamado, usuarios, dataInicio, dataFim]);
+
+    // Função auxiliar para renderizar a badge regional
+    const renderRegiaoBadge = (regiao: string) => {
+        if (!regiao || regiao === 'Não def.') return null;
+
+        const isSul = regiao === 'Sul';
+        const isNorte = regiao === 'Norte';
+
+        let bgColor = 'var(--bg-hover)';
+        let textColor = 'var(--text-secondary)';
+
+        if (isSul) {
+            bgColor = 'var(--danger-bg)';
+            textColor = 'var(--danger)';
+        } else if (isNorte) {
+            bgColor = 'var(--info-bg)';
+            textColor = 'var(--info)';
+        }
+
+        return (
+            <span style={{
+                fontSize: 11,
+                marginLeft: 8,
+                padding: '2px 8px',
+                background: bgColor,
+                color: textColor,
+                borderRadius: 12,
+                fontWeight: 600
+            }}>
+                {regiao}
+            </span>
+        );
+    };
 
     return (
         <div className="indicadores-internos">
+            {/* Filtros */}
+            <div className="filters-bar" style={{ marginBottom: '24px', background: 'var(--bg-card)', padding: '16px 24px', borderRadius: 'var(--radius-lg)', border: '1px solid var(--border-color)', display: 'flex', alignItems: 'center', gap: '16px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--text-secondary)' }}>
+                    <Calendar size={18} />
+                    <span style={{ fontWeight: 600, fontSize: '13px' }}>Período de Análise:</span>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <input
+                        type="date"
+                        value={dataInicio}
+                        onChange={(e) => setDataInicio(e.target.value)}
+                        className="filter-select"
+                        style={{ width: '140px', padding: '6px 10px' }}
+                    />
+                    <span style={{ color: 'var(--text-muted)' }}>até</span>
+                    <input
+                        type="date"
+                        value={dataFim}
+                        onChange={(e) => setDataFim(e.target.value)}
+                        className="filter-select"
+                        style={{ width: '140px', padding: '6px 10px' }}
+                    />
+                </div>
+                {/* Botão para resetar para o mês atual rapidamente */}
+                <button
+                    onClick={() => {
+                        const hoje = new Date();
+                        const pn = new Date(hoje.getFullYear(), hoje.getMonth(), 1);
+                        const ult = new Date(hoje.getFullYear(), hoje.getMonth() + 1, 0);
+                        setDataInicio(pn.toISOString().split('T')[0]);
+                        setDataFim(ult.toISOString().split('T')[0]);
+                    }}
+                    style={{
+                        background: 'transparent',
+                        border: '1px solid var(--border-color)',
+                        color: 'var(--text-secondary)',
+                        padding: '6px 12px',
+                        borderRadius: 'var(--radius-sm)',
+                        cursor: 'pointer',
+                        fontSize: '12px',
+                        fontWeight: 500,
+                        transition: 'al var(--transition)'
+                    }}
+                    onMouseOver={(e) => {
+                        e.currentTarget.style.background = 'var(--bg-hover)';
+                        e.currentTarget.style.color = 'var(--text-primary)';
+                    }}
+                    onMouseOut={(e) => {
+                        e.currentTarget.style.background = 'transparent';
+                        e.currentTarget.style.color = 'var(--text-secondary)';
+                    }}
+                >
+                    Mês Atual
+                </button>
+            </div>
+
             {/* Primeira Linha: KPI Cards Gerais e Regionais */}
             <div className="summary-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '20px', marginBottom: '30px' }}>
                 <KPICard title="Total de Chamados" value={stats.total} icon={<TicketCheck size={24} color="var(--text-secondary)" />} />
-                <KPICard title="Total de Chamados - Sul" value={stats.totalSul} icon={<TicketCheck size={24} color="var(--blue)" />} />
-                <KPICard title="Total de Chamados - Norte" value={stats.totalNorte} icon={<TicketCheck size={24} color="var(--purple)" />} />
+                <KPICard title="Total de Chamados - Sul" value={stats.totalSul} icon={<TicketCheck size={24} color="var(--danger)" />} />
+                <KPICard title="Total de Chamados - Norte" value={stats.totalNorte} icon={<TicketCheck size={24} color="var(--info)" />} />
                 <KPICard title="Desempenho SLA (No Prazo)" value={`${stats.fechados > 0 ? Math.round(((stats.fechados - stats.violados) / stats.fechados) * 100) : 100}%`} icon={<Clock size={24} color="var(--accent)" />} highlight />
                 <KPICard title="Chamados em Atraso" value={stats.violados} icon={<AlertTriangle size={24} color="var(--danger)" />} />
             </div>
@@ -89,40 +241,45 @@ export default function IndicadoresInternos() {
                     <h3 style={{ marginTop: 0, marginBottom: 16 }}>Top 5 Laboratórios (Geral)</h3>
                     <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
                         {stats.byClient.map((c, i) => (
-                            <li key={i} style={{ display: 'flex', justifyContent: 'space-between', padding: '12px 0', borderBottom: i === 4 ? 'none' : '1px solid var(--border)' }}>
-                                <div>
+                            <li key={i} style={{ display: 'flex', justifyContent: 'space-between', padding: '12px 0', borderBottom: i === stats.byClient.length - 1 ? 'none' : '1px solid var(--border)' }}>
+                                <div style={{ display: 'flex', alignItems: 'center' }}>
                                     <span style={{ fontWeight: 500 }}>{c.nome}</span>
-                                    <span style={{ fontSize: 11, marginLeft: 8, padding: '2px 6px', background: 'var(--bg-hover)', borderRadius: 12 }}>{c.regiao}</span>
+                                    {renderRegiaoBadge(c.regiao)}
                                 </div>
                                 <span style={{ fontWeight: 'bold', color: 'var(--accent)' }}>{c.count}</span>
                             </li>
                         ))}
+                        {stats.byClient.length === 0 && <li style={{ padding: '12px 0', color: 'var(--text-muted)' }}>Nenhum chamado no período</li>}
                     </ul>
                 </div>
 
                 <div className="admin-card" style={{ padding: 24, margin: 0 }}>
-                    <h3 style={{ marginTop: 0, marginBottom: 16 }}>Top 5 Laboratórios (Sul)</h3>
+                    <h3 style={{ marginTop: 0, marginBottom: 16, display: 'flex', alignItems: 'center', gap: 8 }}>
+                        Top 5 Laboratórios (Sul)
+                    </h3>
                     <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
                         {stats.byClientSul.map((c, i) => (
                             <li key={i} style={{ display: 'flex', justifyContent: 'space-between', padding: '12px 0', borderBottom: i === stats.byClientSul.length - 1 ? 'none' : '1px solid var(--border)' }}>
                                 <span style={{ fontWeight: 500 }}>{c.nome}</span>
-                                <span style={{ fontWeight: 'bold', color: 'var(--blue)' }}>{c.count}</span>
+                                <span style={{ fontWeight: 'bold', color: 'var(--danger)' }}>{c.count}</span>
                             </li>
                         ))}
-                        {stats.byClientSul.length === 0 && <li style={{ padding: '12px 0', color: 'var(--text-muted)' }}>Nenhum chamado</li>}
+                        {stats.byClientSul.length === 0 && <li style={{ padding: '12px 0', color: 'var(--text-muted)' }}>Nenhum chamado no período</li>}
                     </ul>
                 </div>
 
                 <div className="admin-card" style={{ padding: 24, margin: 0 }}>
-                    <h3 style={{ marginTop: 0, marginBottom: 16 }}>Top 5 Laboratórios (Norte)</h3>
+                    <h3 style={{ marginTop: 0, marginBottom: 16, display: 'flex', alignItems: 'center', gap: 8 }}>
+                        Top 5 Laboratórios (Norte)
+                    </h3>
                     <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
                         {stats.byClientNorte.map((c, i) => (
                             <li key={i} style={{ display: 'flex', justifyContent: 'space-between', padding: '12px 0', borderBottom: i === stats.byClientNorte.length - 1 ? 'none' : '1px solid var(--border)' }}>
                                 <span style={{ fontWeight: 500 }}>{c.nome}</span>
-                                <span style={{ fontWeight: 'bold', color: 'var(--purple)' }}>{c.count}</span>
+                                <span style={{ fontWeight: 'bold', color: 'var(--info)' }}>{c.count}</span>
                             </li>
                         ))}
-                        {stats.byClientNorte.length === 0 && <li style={{ padding: '12px 0', color: 'var(--text-muted)' }}>Nenhum chamado</li>}
+                        {stats.byClientNorte.length === 0 && <li style={{ padding: '12px 0', color: 'var(--text-muted)' }}>Nenhum chamado no período</li>}
                     </ul>
                 </div>
             </div>
@@ -136,10 +293,19 @@ export default function IndicadoresInternos() {
                     <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
                         {stats.byContato.map((t, i) => (
                             <li key={i} style={{ display: 'flex', justifyContent: 'space-between', padding: '12px 0', borderBottom: i === stats.byContato.length - 1 ? 'none' : '1px solid var(--border)' }}>
-                                <span>{t.nome}</span>
-                                <span style={{ fontWeight: 'bold', color: 'var(--accent)' }}>{t.count} chamados</span>
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                        <span style={{ fontWeight: 500 }}>{t.nome}</span>
+                                        {renderRegiaoBadge(t.labRegiao || '')}
+                                    </div>
+                                    <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+                                        {t.labNome}
+                                    </span>
+                                </div>
+                                <span style={{ fontWeight: 'bold', color: 'var(--accent)', alignSelf: 'center' }}>{t.count} chamados</span>
                             </li>
                         ))}
+                        {stats.byContato.length === 0 && <li style={{ padding: '12px 0', color: 'var(--text-muted)' }}>Nenhum chamado no período</li>}
                     </ul>
                 </div>
 
@@ -154,6 +320,7 @@ export default function IndicadoresInternos() {
                                 <span style={{ fontWeight: 'bold', color: 'var(--success)' }}>{t.count} fechados</span>
                             </li>
                         ))}
+                        {stats.byTecnico.length === 0 && <li style={{ padding: '12px 0', color: 'var(--text-muted)' }}>Nenhum chamado fechado no período</li>}
                     </ul>
                 </div>
             </div>
@@ -169,6 +336,7 @@ export default function IndicadoresInternos() {
                                 <span style={{ fontSize: 24, fontWeight: 'bold' }}>{cat.count}</span>
                             </div>
                         ))}
+                        {stats.byCategoria.length === 0 && <span style={{ color: 'var(--text-muted)' }}>Nenhum dado no período</span>}
                     </div>
                 </div>
             </div>
