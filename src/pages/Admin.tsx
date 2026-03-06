@@ -6,15 +6,17 @@ import {
     Timer,
     Tags,
     ListChecks,
+    Contact
 } from 'lucide-react';
 
 import ClientesPanel from '../components/admin/ClientesPanel';
 import UsuariosPanel from '../components/admin/UsuariosPanel';
+import ColaboradoresPanel from '../components/admin/ColaboradoresPanel';
 import CategoriasPanel from '../components/admin/CategoriasPanel';
 import StatusPanel from '../components/admin/StatusPanel';
 import SLAPanel from '../components/admin/SLAPanel';
 
-type AdminTab = 'clientes' | 'usuarios' | 'categorias' | 'status' | 'sla';
+type AdminTab = 'clientes' | 'usuarios' | 'colaboradores' | 'categorias' | 'status' | 'sla';
 
 export default function Admin() {
     const { clientes, usuarios, categoriasChamado, statusConfigs, slaConfigs } = useApp();
@@ -28,14 +30,21 @@ export default function Admin() {
                     onClick={() => setActiveTab('clientes')}
                 >
                     <Building2 size={16} style={{ marginRight: 6, verticalAlign: -3 }} />
-                    Clientes ({clientes.length})
+                    Laboratórios ({clientes.length})
+                </button>
+                <button
+                    className={`admin-tab ${activeTab === 'colaboradores' ? 'active' : ''}`}
+                    onClick={() => setActiveTab('colaboradores')}
+                >
+                    <Contact size={16} style={{ marginRight: 6, verticalAlign: -3 }} />
+                    Colaboradores
                 </button>
                 <button
                     className={`admin-tab ${activeTab === 'usuarios' ? 'active' : ''}`}
                     onClick={() => setActiveTab('usuarios')}
                 >
                     <Users size={16} style={{ marginRight: 6, verticalAlign: -3 }} />
-                    Usuários ({usuarios.length})
+                    Usuários Sist. ({usuarios.length})
                 </button>
                 <button
                     className={`admin-tab ${activeTab === 'categorias' ? 'active' : ''}`}
@@ -61,6 +70,7 @@ export default function Admin() {
             </div>
 
             {activeTab === 'clientes' && <ClientesPanel />}
+            {activeTab === 'colaboradores' && <ColaboradoresPanel />}
             {activeTab === 'usuarios' && <UsuariosPanel />}
             {activeTab === 'categorias' && <CategoriasPanel />}
             {activeTab === 'status' && <StatusPanel />}
