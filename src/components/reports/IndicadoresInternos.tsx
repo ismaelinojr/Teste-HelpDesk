@@ -1,7 +1,6 @@
 import React, { useMemo } from 'react';
 import { useApp } from '../../context/AppContext';
-import { TicketCheck, Clock, CheckCircle2, AlertTriangle, Users } from 'lucide-react';
-import type { Chamado } from '../../types';
+import { TicketCheck, Clock, AlertTriangle, Users } from 'lucide-react';
 
 export default function IndicadoresInternos() {
     const { chamados, categoriasChamado, clientes, usuarios } = useApp();
@@ -11,9 +10,16 @@ export default function IndicadoresInternos() {
         const abertos = chamados.filter(c => c.status !== 'fechado').length;
         const fechados = chamados.filter(c => c.status === 'fechado').length;
 
-        // FCR - First Contact Resolution (Resolvido com solucaoFinal preenchida e poucas interações - limitaremos a checagem mockada a chamados fechados sem reabertura, assumimos que 60% são FCR mock pro MVP ou calculamos pelas interacoes se tivessemos)
-        // Para simplificar no MVP local, vamos inferir que chamados "fechados" diretamente com técnico assinado na criação = FCR. Mas aqui faremos um mock simples com %
-        const fcrRate = fechados > 0 ? 68.5 : 0; // % Mock temporário
+        // Separação por região (via lookup de cliente)
+        const totalSul = chamados.filter(c => {
+            const cliente = clientes.find(cli => cli.id === c.clienteId);
+            return cliente?.regiao === 'Sul';
+        }).length;
+
+        const totalNorte = chamados.filter(c => {
+            const cliente = clientes.find(cli => cli.id === c.clienteId);
+            return cliente?.regiao === 'Norte';
+        }).length;
 
         // SLA Violation
         const violados = chamados.filter(c => {
@@ -27,11 +33,15 @@ export default function IndicadoresInternos() {
         }).length;
 
         // Rankings
-        const byClient = clientes.map(cli => ({
+        const byClientInfo = clientes.map(cli => ({
             nome: cli.nome,
             regiao: cli.regiao || 'Não def.',
             count: chamados.filter(ch => ch.clienteId === cli.id).length
-        })).sort((a, b) => b.count - a.count).slice(0, 5);
+        }));
+
+        const byClient = [...byClientInfo].sort((a, b) => b.count - a.count).slice(0, 5);
+        const byClientSul = byClientInfo.filter(c => c.regiao === 'Sul').sort((a, b) => b.count - a.count).slice(0, 5);
+        const byClientNorte = byClientInfo.filter(c => c.regiao === 'Norte').sort((a, b) => b.count - a.count).slice(0, 5);
 
         const byCategoria = categoriasChamado.map(cat => ({
             nome: cat.nome,
@@ -43,24 +53,40 @@ export default function IndicadoresInternos() {
             count: chamados.filter(ch => ch.tecnicoId === tec.id && ch.status === 'fechado').length
         })).sort((a, b) => b.count - a.count);
 
+        // Agrupa por colaborador que abriu o chamado (usando o contatoNome ou 'Usuário do Laboratório')
+        const contatosMap = new Map<string, number>();
+        chamados.forEach(c => {
+            const nomeContato = c.contatoNome || 'Não Identificado';
+            contatosMap.set(nomeContato, (contatosMap.get(nomeContato) || 0) + 1);
+        });
+        const byContato = Array.from(contatosMap.entries())
+            .map(([nome, count]) => ({ nome, count }))
+            .sort((a, b) => b.count - a.count)
+            .slice(0, 5);
+
         return {
-            total, abertos, fechados, fcrRate, violados, byClient, byCategoria, byTecnico
+            total, abertos, fechados, violados,
+            totalSul, totalNorte,
+            byClient, byClientSul, byClientNorte,
+            byCategoria, byTecnico, byContato
         };
     }, [chamados, clientes, categoriasChamado, usuarios]);
 
     return (
         <div className="indicadores-internos">
-            {/* KPI Cards */}
-            <div className="summary-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '20px', marginBottom: '30px' }}>
+            {/* Primeira Linha: KPI Cards Gerais e Regionais */}
+            <div className="summary-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '20px', marginBottom: '30px' }}>
                 <KPICard title="Total de Chamados" value={stats.total} icon={<TicketCheck size={24} color="var(--text-secondary)" />} />
+                <KPICard title="Total de Chamados - Sul" value={stats.totalSul} icon={<TicketCheck size={24} color="var(--blue)" />} />
+                <KPICard title="Total de Chamados - Norte" value={stats.totalNorte} icon={<TicketCheck size={24} color="var(--purple)" />} />
                 <KPICard title="Desempenho SLA (No Prazo)" value={`${stats.fechados > 0 ? Math.round(((stats.fechados - stats.violados) / stats.fechados) * 100) : 100}%`} icon={<Clock size={24} color="var(--accent)" />} highlight />
-                <KPICard title="Resolução no 1º Contato (FCR)" value={`${stats.fcrRate}%`} icon={<CheckCircle2 size={24} color="var(--success)" />} />
                 <KPICard title="Chamados em Atraso" value={stats.violados} icon={<AlertTriangle size={24} color="var(--danger)" />} />
             </div>
 
-            <div className="charts-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px' }}>
+            {/* Segunda Linha: Volume por Laboratório (Geral, Sul, Norte) */}
+            <div className="charts-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '24px', marginBottom: '30px' }}>
                 <div className="admin-card" style={{ padding: 24, margin: 0 }}>
-                    <h3 style={{ marginTop: 0, marginBottom: 16 }}>Top 5 Laboratórios (Volume)</h3>
+                    <h3 style={{ marginTop: 0, marginBottom: 16 }}>Top 5 Laboratórios (Geral)</h3>
                     <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
                         {stats.byClient.map((c, i) => (
                             <li key={i} style={{ display: 'flex', justifyContent: 'space-between', padding: '12px 0', borderBottom: i === 4 ? 'none' : '1px solid var(--border)' }}>
@@ -69,6 +95,49 @@ export default function IndicadoresInternos() {
                                     <span style={{ fontSize: 11, marginLeft: 8, padding: '2px 6px', background: 'var(--bg-hover)', borderRadius: 12 }}>{c.regiao}</span>
                                 </div>
                                 <span style={{ fontWeight: 'bold', color: 'var(--accent)' }}>{c.count}</span>
+                            </li>
+                        ))}
+                    </ul>
+                </div>
+
+                <div className="admin-card" style={{ padding: 24, margin: 0 }}>
+                    <h3 style={{ marginTop: 0, marginBottom: 16 }}>Top 5 Laboratórios (Sul)</h3>
+                    <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
+                        {stats.byClientSul.map((c, i) => (
+                            <li key={i} style={{ display: 'flex', justifyContent: 'space-between', padding: '12px 0', borderBottom: i === stats.byClientSul.length - 1 ? 'none' : '1px solid var(--border)' }}>
+                                <span style={{ fontWeight: 500 }}>{c.nome}</span>
+                                <span style={{ fontWeight: 'bold', color: 'var(--blue)' }}>{c.count}</span>
+                            </li>
+                        ))}
+                        {stats.byClientSul.length === 0 && <li style={{ padding: '12px 0', color: 'var(--text-muted)' }}>Nenhum chamado</li>}
+                    </ul>
+                </div>
+
+                <div className="admin-card" style={{ padding: 24, margin: 0 }}>
+                    <h3 style={{ marginTop: 0, marginBottom: 16 }}>Top 5 Laboratórios (Norte)</h3>
+                    <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
+                        {stats.byClientNorte.map((c, i) => (
+                            <li key={i} style={{ display: 'flex', justifyContent: 'space-between', padding: '12px 0', borderBottom: i === stats.byClientNorte.length - 1 ? 'none' : '1px solid var(--border)' }}>
+                                <span style={{ fontWeight: 500 }}>{c.nome}</span>
+                                <span style={{ fontWeight: 'bold', color: 'var(--purple)' }}>{c.count}</span>
+                            </li>
+                        ))}
+                        {stats.byClientNorte.length === 0 && <li style={{ padding: '12px 0', color: 'var(--text-muted)' }}>Nenhum chamado</li>}
+                    </ul>
+                </div>
+            </div>
+
+            {/* Terceira Linha: Performance de Usuários e Técnicos */}
+            <div className="charts-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px', marginBottom: '30px' }}>
+                <div className="admin-card" style={{ padding: 24, margin: 0 }}>
+                    <h3 style={{ marginTop: 0, marginBottom: 16, display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <Users size={18} /> Top 5 Colaboradores (Abertura)
+                    </h3>
+                    <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
+                        {stats.byContato.map((t, i) => (
+                            <li key={i} style={{ display: 'flex', justifyContent: 'space-between', padding: '12px 0', borderBottom: i === stats.byContato.length - 1 ? 'none' : '1px solid var(--border)' }}>
+                                <span>{t.nome}</span>
+                                <span style={{ fontWeight: 'bold', color: 'var(--accent)' }}>{t.count} chamados</span>
                             </li>
                         ))}
                     </ul>
@@ -87,8 +156,11 @@ export default function IndicadoresInternos() {
                         ))}
                     </ul>
                 </div>
+            </div>
 
-                <div className="admin-card" style={{ padding: 24, margin: 0, gridColumn: '1 / -1' }}>
+            {/* Quarta Linha: Categorização */}
+            <div className="charts-grid" style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '24px' }}>
+                <div className="admin-card" style={{ padding: 24, margin: 0 }}>
                     <h3 style={{ marginTop: 0, marginBottom: 16 }}>Chamados por Categoria</h3>
                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12 }}>
                         {stats.byCategoria.map((cat, i) => (

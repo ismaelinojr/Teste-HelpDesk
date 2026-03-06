@@ -23,6 +23,7 @@ function getPageTitle(pathname: string): string {
     if (pathname === '/') return 'Dashboard';
     if (pathname === '/novo') return 'Novo Chamado';
     if (pathname === '/admin') return 'Administração';
+    if (pathname === '/relatorios') return 'Relatórios';
     if (pathname.startsWith('/chamado/')) return 'Detalhe do Chamado';
     return 'I9Chamados';
 }
