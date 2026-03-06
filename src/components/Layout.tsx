@@ -24,7 +24,7 @@ function getPageTitle(pathname: string): string {
     if (pathname === '/novo') return 'Novo Chamado';
     if (pathname === '/admin') return 'Administração';
     if (pathname.startsWith('/chamado/')) return 'Detalhe do Chamado';
-    return 'Help Desk';
+    return 'I9Chamados';
 }
 
 export default function Layout() {
@@ -49,8 +49,8 @@ export default function Layout() {
                         <Ticket size={18} />
                     </div>
                     <div>
-                        <div className="sidebar-title">Help Desk TI</div>
-                        <div className="sidebar-subtitle">Sistema de Chamados</div>
+                        <div className="sidebar-title">I9Chamados</div>
+                        <div className="sidebar-subtitle">Gestão de Chamados</div>
                     </div>
                     <button
                         className="btn-ghost"
@@ -78,11 +78,26 @@ export default function Layout() {
                 </nav>
 
                 <div className="sidebar-footer">
-                    <div className="user-info-footer">
-                        <span className={`user-role-badge ${currentUser.role}`}>
-                            {currentUser.role}
-                        </span>
-                        <div className="user-email-footer">{currentUser.email}</div>
+                    <div className="user-profile-footer">
+                        <div className="user-profile-left">
+                            <div className="user-avatar-footer">
+                                {currentUser.nome.split(' ').map(n => n[0]).join('').slice(0, 2)}
+                            </div>
+                            <div className="user-details-footer">
+                                <span className="user-name-footer">{currentUser.nome}</span>
+                                <span className={`user-role-badge ${currentUser.role}`}>
+                                    {currentUser.role}
+                                </span>
+                                <div className="user-email-footer">{currentUser.email}</div>
+                            </div>
+                        </div>
+                        <button
+                            className="btn-logout-footer"
+                            onClick={logout}
+                            title="Sair do sistema"
+                        >
+                            <LogOut size={18} />
+                        </button>
                     </div>
                 </div>
             </aside>
@@ -98,23 +113,7 @@ export default function Layout() {
                     </button>
                     <h1 className="page-title">{getPageTitle(location.pathname)}</h1>
                 </div>
-                <div className="header-right">
-                    <div className="header-user">
-                        <div className="user-details-header">
-                            <span className="user-name-header">{currentUser.nome}</span>
-                        </div>
-                        <div className="header-avatar">
-                            {currentUser.nome.split(' ').map(n => n[0]).join('').slice(0, 2)}
-                        </div>
-                        <button
-                            className="btn-logout-header"
-                            onClick={logout}
-                            title="Sair do sistema"
-                        >
-                            <LogOut size={18} />
-                        </button>
-                    </div>
-                </div>
+
             </header>
 
             {/* Content */}
@@ -123,11 +122,45 @@ export default function Layout() {
             </main>
 
             <style>{`
-                .user-info-footer {
-                    padding: 10px;
+                .user-profile-footer {
+                    display: flex;
+                    align-items: center;
+                    justify-content: space-between;
+                    gap: 12px;
+                }
+                .user-profile-left {
+                    display: flex;
+                    align-items: center;
+                    gap: 10px;
+                    min-width: 0;
+                }
+                .user-avatar-footer {
+                    width: 36px;
+                    height: 36px;
+                    border-radius: 50%;
+                    background: var(--stakent-gradient);
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    font-weight: 700;
+                    font-size: 13px;
+                    color: white;
+                    flex-shrink: 0;
+                    box-shadow: 0 0 10px rgba(142, 124, 255, 0.2);
+                }
+                .user-details-footer {
                     display: flex;
                     flex-direction: column;
-                    gap: 5px;
+                    gap: 2px;
+                    min-width: 0;
+                }
+                .user-name-footer {
+                    font-weight: 600;
+                    font-size: 13px;
+                    color: var(--text-primary);
+                    white-space: nowrap;
+                    overflow: hidden;
+                    text-overflow: ellipsis;
                 }
                 .user-email-footer {
                     font-size: 11px;
@@ -136,7 +169,7 @@ export default function Layout() {
                     text-overflow: ellipsis;
                     white-space: nowrap;
                 }
-                .btn-logout-header {
+                .btn-logout-footer {
                     background: none;
                     border: none;
                     color: var(--text-muted);
@@ -147,15 +180,11 @@ export default function Layout() {
                     align-items: center;
                     justify-content: center;
                     transition: all 0.2s;
-                    margin-left: 10px;
+                    flex-shrink: 0;
                 }
-                .btn-logout-header:hover {
+                .btn-logout-footer:hover {
                     color: #f38ba8;
                     background: rgba(243, 139, 168, 0.1);
-                }
-                .user-name-header {
-                    font-weight: 500;
-                    font-size: 14px;
                 }
             `}</style>
         </div>

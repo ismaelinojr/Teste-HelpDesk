@@ -1,4 +1,4 @@
-// Tipos principais do sistema Help Desk TI
+// Tipos principais do sistema I9Chamados
 
 export type StatusChamado = 'aberto' | 'em_atendimento' | 'aguardando_cliente' | 'fechado';
 export type Prioridade = 'normal' | 'urgente';

@@ -8,11 +8,11 @@ export const configSLA: ConfigSLA = {
 
 // ===== USUÁRIOS (Técnicos e Admin) =====
 export let usuarios: Usuario[] = [
-    { id: 'u1', nome: 'Ismael Silva', role: 'admin', email: 'ismael@helpdesk.com' },
-    { id: 'u2', nome: 'Carlos Oliveira', role: 'tecnico', email: 'carlos@helpdesk.com' },
-    { id: 'u3', nome: 'Fernanda Lima', role: 'tecnico', email: 'fernanda@helpdesk.com' },
-    { id: 'u4', nome: 'Rafael Santos', role: 'tecnico', email: 'rafael@helpdesk.com' },
-    { id: 'u5', nome: 'Juliana Costa', role: 'tecnico', email: 'juliana@helpdesk.com' },
+    { id: 'u1', nome: 'Ismael Silva', role: 'admin', email: 'ismael@i9chamados.com' },
+    { id: 'u2', nome: 'Carlos Oliveira', role: 'tecnico', email: 'carlos@i9chamados.com' },
+    { id: 'u3', nome: 'Fernanda Lima', role: 'tecnico', email: 'fernanda@i9chamados.com' },
+    { id: 'u4', nome: 'Rafael Santos', role: 'tecnico', email: 'rafael@i9chamados.com' },
+    { id: 'u5', nome: 'Juliana Costa', role: 'tecnico', email: 'juliana@i9chamados.com' },
 ];
 
 // ===== CLIENTES (26 Laboratórios) =====

@@ -132,11 +132,11 @@ export default function GeradorPDFCliente() {
                                 fontWeight: 'bold',
                                 fontSize: 22
                             }}>
-                                HD
+                                I9
                             </div>
                             <div>
                                 <h1 style={{ margin: 0, fontSize: 26, color: '#111827', fontWeight: 800, letterSpacing: '-0.5px' }}>Relatório de Serviço</h1>
-                                <p style={{ margin: '4px 0 0 0', color: '#6b7280', fontSize: 13, textTransform: 'uppercase', letterSpacing: '1px', fontWeight: 600 }}>Help Desk TI Solutions</p>
+                                <p style={{ margin: '4px 0 0 0', color: '#6b7280', fontSize: 13, textTransform: 'uppercase', letterSpacing: '1px', fontWeight: 600 }}>I9Chamados</p>
                             </div>
                         </div>
                         <div style={{ textAlign: 'right', background: '#f3f4f6', padding: '12px 20px', borderRadius: 8 }}>
@@ -287,7 +287,7 @@ export default function GeradorPDFCliente() {
                     </div>
 
                     <div style={{ marginTop: 40, paddingTop: 24, borderTop: '2px dashed #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 11, color: '#94a3b8' }}>
-                        <div>Documento emitido automaticamente por <strong>Help Desk TI</strong>. Uso confidencial.</div>
+                        <div>Documento emitido automaticamente por <strong>I9Chamados</strong>. Uso confidencial.</div>
                         <div>Página 1 de 1</div>
                     </div>
                 </div>

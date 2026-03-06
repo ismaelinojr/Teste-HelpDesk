@@ -23,7 +23,7 @@ const LoginPage: React.FC = () => {
             if (success) {
                 navigate('/');
             } else {
-                setError('Credenciais inválidas. Tente ismael@helpdesk.com');
+                setError('Credenciais inválidas. Tente ismael@i9chamados.com');
             }
         } catch (err) {
             setError('Ocorreu um erro ao tentar entrar.');
@@ -216,7 +216,7 @@ const LoginPage: React.FC = () => {
                     <div className="logo-wrapper">
                         <LogIn size={32} color="#1e1e2e" />
                     </div>
-                    <h1>Help Desk TI</h1>
+                    <h1>I9Chamados</h1>
                     <p>Acesse sua conta para gerenciar chamados</p>
                 </div>
 
@@ -276,7 +276,7 @@ const LoginPage: React.FC = () => {
                 </form>
 
                 <div className="footer-text">
-                    &copy; 2026 Help Desk TI - Versão MVP
+                    &copy; 2026 I9Chamados - Versão MVP
                 </div>
             </div>
         </div>
