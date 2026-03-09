@@ -31,6 +31,9 @@ export async function updateTicketStatus(id: string, status: StatusChamado): Pro
     if (!chamado) return undefined;
 
     chamado.status = status;
+    if (status === 'aberto') {
+        chamado.tecnicoId = null;
+    }
     if (status === 'em_atendimento' && !chamado.dataInicio) {
         chamado.dataInicio = new Date().toISOString();
     }
