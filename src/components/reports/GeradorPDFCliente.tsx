@@ -61,7 +61,7 @@ export default function GeradorPDFCliente() {
         const byCategoria = categoriasChamado.map(cat => ({
             nome: cat.nome,
             count: chamadosFiltrados.filter(ch => ch.categoriaId === cat.id).length
-        })).filter(c => c.count > 0);
+        })).filter(c => c.count > 0).sort((a, b) => b.count - a.count);
 
         // Agrupa Top 5 Colaboradores
         const topContatosMap = new Map<string, number>();
@@ -286,12 +286,10 @@ export default function GeradorPDFCliente() {
                                             <th style={{ padding: '12px 10px', color: '#4b5563', fontWeight: 600, textTransform: 'uppercase', fontSize: 10, letterSpacing: '0.5px' }}>Abertura</th>
                                             <th style={{ padding: '12px 10px', color: '#4b5563', fontWeight: 600, textTransform: 'uppercase', fontSize: 10, letterSpacing: '0.5px' }}>Fechamento</th>
                                             <th style={{ padding: '12px 10px', color: '#4b5563', fontWeight: 600, textTransform: 'uppercase', fontSize: 10, letterSpacing: '0.5px', whiteSpace: 'nowrap' }}>T. Total</th>
-                                            <th style={{ padding: '12px 10px', color: '#4b5563', fontWeight: 600, textTransform: 'uppercase', fontSize: 10, letterSpacing: '0.5px' }}>Tipo</th>
                                             <th style={{ padding: '12px 10px', color: '#4b5563', fontWeight: 600, textTransform: 'uppercase', fontSize: 10, letterSpacing: '0.5px' }}>Título / Solicitante</th>
                                             <th style={{ padding: '12px 10px', color: '#4b5563', fontWeight: 600, textTransform: 'uppercase', fontSize: 10, letterSpacing: '0.5px', maxWidth: 150 }}>Descrição</th>
                                             <th style={{ padding: '12px 10px', color: '#4b5563', fontWeight: 600, textTransform: 'uppercase', fontSize: 10, letterSpacing: '0.5px', maxWidth: 150 }}>Solução</th>
                                             <th style={{ padding: '12px 10px', color: '#4b5563', fontWeight: 600, textTransform: 'uppercase', fontSize: 10, letterSpacing: '0.5px' }}>Status</th>
-                                            <th style={{ padding: '12px 10px', color: '#4b5563', fontWeight: 600, textTransform: 'uppercase', fontSize: 10, letterSpacing: '0.5px' }}>SLA</th>
                                         </tr>
                                     </thead>
                                     <tbody>
@@ -301,11 +299,10 @@ export default function GeradorPDFCliente() {
 
                                             let diffHorasLabel = '-';
                                             if (entrega) {
-                                                const diff = (entrega.getTime() - abertura.getTime()) / (1000 * 60 * 60);
-                                                diffHorasLabel = `${diff.toFixed(1)}h`;
+                                                const diff = Math.round((entrega.getTime() - abertura.getTime()) / (1000 * 60));
+                                                diffHorasLabel = `${diff} min`;
                                             }
 
-                                            const catNome = categoriasChamado.find(cat => cat.id === c.categoriaId)?.nome || 'Sem Categoria';
                                             const isEven = index % 2 === 0;
 
                                             return (
@@ -331,11 +328,6 @@ export default function GeradorPDFCliente() {
                                                     {/* Tempo Total */}
                                                     <td style={{ padding: '12px 10px', verticalAlign: 'top', fontWeight: 600, color: '#334155' }}>
                                                         {diffHorasLabel}
-                                                    </td>
-
-                                                    {/* Tipo (Categoria) */}
-                                                    <td style={{ padding: '12px 10px', verticalAlign: 'top', color: '#4b5563' }}>
-                                                        {catNome}
                                                     </td>
 
                                                     {/* Título / Solicitante */}
@@ -380,12 +372,6 @@ export default function GeradorPDFCliente() {
                                                         }}>
                                                             {c.status.replace('_', ' ')}
                                                         </span>
-                                                    </td>
-
-                                                    {/* SLA */}
-                                                    <td style={{ padding: '12px 10px', verticalAlign: 'top', whiteSpace: 'nowrap' }}>
-                                                        <div style={{ color: '#1e293b', fontWeight: 500, fontSize: 10 }}>{c.slaHoras}h</div>
-                                                        <div style={{ fontSize: 9, color: '#64748b', marginTop: 2, textTransform: 'capitalize' }}>{c.prioridade}</div>
                                                     </td>
                                                 </tr>
                                             )

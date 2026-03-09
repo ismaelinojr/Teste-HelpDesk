@@ -82,14 +82,14 @@ export default function IndicadoresInternos() {
             count: chamadosFiltrados.filter(ch => ch.clienteId === cli.id).length
         }));
 
-        const byClient = [...byClientInfo].sort((a, b) => b.count - a.count).slice(0, 5);
-        const byClientSul = byClientInfo.filter(c => c.regiao === 'Sul').sort((a, b) => b.count - a.count).slice(0, 5);
-        const byClientNorte = byClientInfo.filter(c => c.regiao === 'Norte').sort((a, b) => b.count - a.count).slice(0, 5);
+        const byClient = [...byClientInfo].sort((a, b) => b.count - a.count).filter(c => c.count > 0).slice(0, 5);
+        const byClientSul = byClientInfo.filter(c => c.regiao === 'Sul').sort((a, b) => b.count - a.count).filter(c => c.count > 0).slice(0, 5);
+        const byClientNorte = byClientInfo.filter(c => c.regiao === 'Norte').sort((a, b) => b.count - a.count).filter(c => c.count > 0).slice(0, 5);
 
         const byCategoria = categoriasChamado.map(cat => ({
             nome: cat.nome,
             count: chamadosFiltrados.filter(ch => ch.categoriaId === cat.id).length
-        })).sort((a, b) => b.count - a.count);
+        })).filter(cat => cat.count > 0).sort((a, b) => b.count - a.count);
 
         const byTecnico = usuarios.filter(u => u.role === 'tecnico').map(tec => ({
             nome: tec.nome,
