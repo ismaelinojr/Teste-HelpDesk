@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useApp } from '../../context/AppContext';
-import { Users, Search, Plus, Edit2, Trash2, Power } from 'lucide-react';
+import { Users, Search, Plus, Edit2, Trash2, Power, Key } from 'lucide-react';
 import ModalForm from './ModalForm';
 import type { Usuario, Role } from '../../types';
 
@@ -56,6 +56,13 @@ export default function UsuariosPanel() {
         }
     };
 
+    const handleResetPassword = (usuario: Usuario) => {
+        if (confirm(`Enviar e-mail de redefinição de senha para ${usuario.nome} (${usuario.email})?`)) {
+            // Mock de envio de e-mail
+            alert(`✅ E-mail de redefinição enviado com sucesso para ${usuario.email}!`);
+        }
+    };
+
     return (
         <div className="admin-panel area-usuarios">
             <div className="panel-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
@@ -97,6 +104,9 @@ export default function UsuariosPanel() {
                             </span>
                         </div>
                         <div className="card-actions" style={{ display: 'flex', gap: 8 }}>
+                            <button className="btn-icon" onClick={() => handleResetPassword(usuario)} title="Redefinir Senha" style={{ background: 'var(--bg-hover)', border: 'none', padding: 8, borderRadius: 6, cursor: 'pointer', color: 'var(--warning, #f97316)' }}>
+                                <Key size={16} />
+                            </button>
                             <button className="btn-icon" onClick={() => handleOpenEdit(usuario)} title="Editar" style={{ background: 'var(--bg-hover)', border: 'none', padding: 8, borderRadius: 6, cursor: 'pointer', color: 'var(--text-primary)' }}>
                                 <Edit2 size={16} />
                             </button>
@@ -145,6 +155,13 @@ export default function UsuariosPanel() {
                             <option value="admin">Administrador</option>
                         </select>
                     </div>
+
+                    {!editingUsuario && (
+                        <div style={{ fontSize: '13px', color: 'var(--text-secondary)', backgroundColor: 'rgba(137, 180, 250, 0.1)', padding: '10px', borderRadius: '6px', borderLeft: '3px solid #89b4fa' }}>
+                            <p style={{ margin: 0 }}>ℹ️ Um e-mail de convite será enviado para que o usuário defina sua senha no primeiro acesso.</p>
+                        </div>
+                    )}
+
                     <div className="form-actions" style={{ display: 'flex', justifyContent: 'flex-end', gap: 12, marginTop: 16 }}>
                         <button type="button" className="btn btn-secondary" onClick={() => setIsModalOpen(false)}>Cancelar</button>
                         <button type="submit" className="btn btn-primary">Salvar</button>
