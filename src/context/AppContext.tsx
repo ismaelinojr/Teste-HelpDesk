@@ -11,6 +11,7 @@ interface AppState {
     chamados: Chamado[];
     usuarios: Usuario[];
     clientes: Cliente[];
+    contatosClientes: ContatoCliente[];
     categoriasChamado: CategoriaChamado[];
     statusConfigs: StatusConfig[];
     slaConfigs: SLAConfig[];
@@ -71,6 +72,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         chamados: [],
         usuarios: [],
         clientes: [],
+        contatosClientes: [],
         categoriasChamado: [],
         statusConfigs: [],
         slaConfigs: [],
@@ -81,19 +83,21 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
     const loadData = useCallback(async () => {
         setState(prev => ({ ...prev, loading: true }));
-        const [chamados, usuarios, clientes, categorias, statuses, slas] = await Promise.all([
+        const [chamados, usuarios, clientes, categorias, statuses, slas, contatos] = await Promise.all([
             ticketService.getTickets(),
             userService.getUsers(),
             clientService.getClients(),
             categoryService.getCategorias(),
             statusService.getStatuses(),
             slaService.getSLAs(),
+            clientService.getAllContatos(),
         ]);
         setState(prev => ({
             ...prev,
             chamados,
             usuarios,
             clientes,
+            contatosClientes: contatos,
             categoriasChamado: categorias,
             statusConfigs: statuses,
             slaConfigs: slas,
@@ -215,15 +219,26 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }, []);
 
     const addContato = useCallback(async (clienteId: string, nome: string, telefone?: string, email?: string, funcao?: string) => {
-        return await clientService.addContato(clienteId, nome, telefone, email, funcao);
+        const novo = await clientService.addContato(clienteId, nome, telefone, email, funcao);
+        setState(prev => ({ ...prev, contatosClientes: [...prev.contatosClientes, novo] }));
+        return novo;
     }, []);
 
     const updateContato = useCallback(async (id: string, data: Partial<ContatoCliente>) => {
-        return await clientService.updateContato(id, data);
+        const atualizado = await clientService.updateContato(id, data);
+        setState(prev => ({
+            ...prev,
+            contatosClientes: prev.contatosClientes.map(c => c.id === id ? atualizado : c)
+        }));
+        return atualizado;
     }, []);
 
     const deleteContato = useCallback(async (id: string) => {
-        return await clientService.deleteContato(id);
+        await clientService.deleteContato(id);
+        setState(prev => ({
+            ...prev,
+            contatosClientes: prev.contatosClientes.filter(c => c.id !== id)
+        }));
     }, []);
 
     const addCliente = useCallback(async (cliente: Omit<Cliente, 'id'>) => {

@@ -42,6 +42,12 @@ export async function deleteCliente(id: string): Promise<void> {
     clientes[index].ativo = false; // Soft delete
 }
 
+export async function getAllContatos(): Promise<ContatoCliente[]> {
+    await delay();
+    const activeClienteIds = new Set(clientes.filter(c => c.ativo !== false).map(c => c.id));
+    return contatos.filter(c => c.ativo !== false && activeClienteIds.has(c.clienteId));
+}
+
 export async function getContatosByCliente(clienteId: string): Promise<ContatoCliente[]> {
     await delay();
     return contatos.filter(c => c.clienteId === clienteId && c.ativo !== false);

@@ -19,7 +19,7 @@ import SLAPanel from '../components/admin/SLAPanel';
 type AdminTab = 'clientes' | 'usuarios' | 'colaboradores' | 'categorias' | 'status' | 'sla';
 
 export default function Admin() {
-    const { clientes, usuarios, categoriasChamado, statusConfigs, slaConfigs } = useApp();
+    const { clientes, usuarios, categoriasChamado, statusConfigs, slaConfigs, contatosClientes } = useApp();
     const [activeTab, setActiveTab] = useState<AdminTab>('clientes');
 
     return (
@@ -37,7 +37,7 @@ export default function Admin() {
                     onClick={() => setActiveTab('colaboradores')}
                 >
                     <Contact size={16} style={{ marginRight: 6, verticalAlign: -3 }} />
-                    Colaboradores
+                    Colaboradores ({contatosClientes?.length || 0})
                 </button>
                 <button
                     className={`admin-tab ${activeTab === 'usuarios' ? 'active' : ''}`}
