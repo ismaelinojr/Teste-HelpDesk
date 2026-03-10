@@ -82,7 +82,7 @@ const h = (hours: number) => new Date(now.getTime() - hours * 60 * 60 * 1000).to
 
 export const chamados: Chamado[] = [
     {
-        id: 'ch1', clienteId: 'c1', contatoNome: 'Ana Costa', categoriaId: 'cat1', titulo: 'Impressora não imprime',
+        id: 'ch1', numero: 1, clienteId: 'c1', contatoNome: 'Ana Costa', categoriaId: 'cat1', titulo: 'Impressora não imprime',
         descricao: 'A impressora fiscal do caixa parou de funcionar após atualização do sistema.',
         status: 'aberto', prioridade: 'urgente', tecnicoId: null,
         slaHoras: 4, dataAbertura: h(2), dataInicio: null, dataFechamento: null, solucaoFinal: null,
