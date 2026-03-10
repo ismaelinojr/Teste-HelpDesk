@@ -77,6 +77,10 @@ export async function updateTicketStatus(id: string, status: StatusChamado): Pro
     if (status === 'fechado') {
         updates.data_fechamento = new Date().toISOString();
     }
+    if (status === 'programacao') {
+        updates.prioridade = 'programacao';
+        updates.sla_horas = 72;
+    }
 
     const { data, error } = await supabase
         .from('chamados')
