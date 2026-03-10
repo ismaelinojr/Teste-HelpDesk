@@ -1,78 +1,146 @@
+import { supabase } from '../lib/supabaseClient';
 import type { Cliente, ContatoCliente } from '../types';
-import { clientes as mockClientes, contatosClientes as mockContatos } from '../mocks/mockData';
 
-const clientes = [...mockClientes];
-let contatos = [...mockContatos];
-let nextContatoId = contatos.length + 1;
-
-function delay(ms = 100): Promise<void> {
-    return new Promise(resolve => setTimeout(resolve, ms));
+// Mapeamento snake_case → camelCase
+function mapCliente(row: Record<string, unknown>): Cliente {
+    return {
+        id: row.id as string,
+        nome: row.nome as string,
+        contato: row.contato as string,
+        endereco: row.endereco as string | undefined,
+        regiao: row.regiao as 'Norte' | 'Sul' | undefined,
+        ativo: row.ativo as boolean | undefined,
+    };
 }
 
+function mapContato(row: Record<string, unknown>): ContatoCliente {
+    return {
+        id: row.id as string,
+        clienteId: row.cliente_id as string,
+        nome: row.nome as string,
+        telefone: row.telefone as string | undefined,
+        email: row.email as string | undefined,
+        funcao: row.funcao as string | undefined,
+        ativo: row.ativo as boolean | undefined,
+    };
+}
+
+// ===== CLIENTES =====
 export async function getClients(): Promise<Cliente[]> {
-    await delay();
-    return clientes.filter(c => c.ativo !== false);
+    const { data, error } = await supabase
+        .from('clientes')
+        .select('*')
+        .eq('ativo', true);
+    if (error) throw error;
+    return (data ?? []).map(mapCliente);
 }
 
 export async function getClientById(id: string): Promise<Cliente | undefined> {
-    await delay();
-    const cliente = clientes.find(c => c.id === id);
-    return cliente?.ativo !== false ? cliente : undefined;
+    const { data, error } = await supabase
+        .from('clientes')
+        .select('*')
+        .eq('id', id)
+        .eq('ativo', true)
+        .maybeSingle();
+    if (error) throw error;
+    return data ? mapCliente(data) : undefined;
 }
 
 export async function addCliente(cliente: Omit<Cliente, 'id'>): Promise<Cliente> {
-    await delay();
-    const newCliente = { ...cliente, id: `c${clientes.length + 1}`, ativo: true };
-    clientes.push(newCliente);
-    return newCliente;
+    const { data, error } = await supabase
+        .from('clientes')
+        .insert({ 
+            nome: cliente.nome, 
+            contato: cliente.contato, 
+            endereco: cliente.endereco, 
+            regiao: cliente.regiao, 
+            ativo: true 
+        })
+        .select()
+        .single();
+    if (error) throw error;
+    return mapCliente(data);
 }
 
-export async function updateCliente(id: string, data: Partial<Cliente>): Promise<Cliente> {
-    await delay();
-    const index = clientes.findIndex(c => c.id === id);
-    if (index === -1) throw new Error('Cliente não encontrado');
-    clientes[index] = { ...clientes[index], ...data };
-    return clientes[index];
+export async function updateCliente(id: string, updates: Partial<Cliente>): Promise<Cliente> {
+    const dbUpdates: Record<string, unknown> = {};
+    if (updates.nome !== undefined) dbUpdates.nome = updates.nome;
+    if (updates.contato !== undefined) dbUpdates.contato = updates.contato;
+    if (updates.endereco !== undefined) dbUpdates.endereco = updates.endereco;
+    if (updates.regiao !== undefined) dbUpdates.regiao = updates.regiao;
+    if (updates.ativo !== undefined) dbUpdates.ativo = updates.ativo;
+
+    const { data, error } = await supabase
+        .from('clientes')
+        .update(dbUpdates)
+        .eq('id', id)
+        .select()
+        .single();
+    if (error) throw error;
+    return mapCliente(data);
 }
 
 export async function deleteCliente(id: string): Promise<void> {
-    await delay();
-    const index = clientes.findIndex(c => c.id === id);
-    if (index === -1) throw new Error('Cliente não encontrado');
-    clientes[index].ativo = false; // Soft delete
+    const { error } = await supabase
+        .from('clientes')
+        .update({ ativo: false })
+        .eq('id', id);
+    if (error) throw error;
+}
+
+// ===== CONTATOS =====
+export async function getAllContatos(): Promise<ContatoCliente[]> {
+    const { data, error } = await supabase
+        .from('contatos_clientes')
+        .select('*')
+        .eq('ativo', true);
+    if (error) throw error;
+    return (data ?? []).map(mapContato);
 }
 
 export async function getContatosByCliente(clienteId: string): Promise<ContatoCliente[]> {
-    await delay();
-    return contatos.filter(c => c.clienteId === clienteId && c.ativo !== false);
+    const { data, error } = await supabase
+        .from('contatos_clientes')
+        .select('*')
+        .eq('cliente_id', clienteId)
+        .eq('ativo', true);
+    if (error) throw error;
+    return (data ?? []).map(mapContato);
 }
 
 export async function addContato(clienteId: string, nome: string, telefone?: string, email?: string, funcao?: string): Promise<ContatoCliente> {
-    await delay();
-    const novoContato: ContatoCliente = {
-        id: `cc${nextContatoId++}`,
-        clienteId,
-        nome,
-        telefone,
-        email,
-        funcao,
-        ativo: true
-    };
-    contatos.push(novoContato);
-    return { ...novoContato };
+    const { data, error } = await supabase
+        .from('contatos_clientes')
+        .insert({ cliente_id: clienteId, nome, telefone, email, funcao, ativo: true })
+        .select()
+        .single();
+    if (error) throw error;
+    return mapContato(data);
 }
 
-export async function updateContato(id: string, data: Partial<ContatoCliente>): Promise<ContatoCliente> {
-    await delay();
-    const index = contatos.findIndex(c => c.id === id);
-    if (index === -1) throw new Error('Contato não encontrado');
-    contatos[index] = { ...contatos[index], ...data };
-    return contatos[index];
+export async function updateContato(id: string, updates: Partial<ContatoCliente>): Promise<ContatoCliente> {
+    const dbUpdates: Record<string, unknown> = {};
+    if (updates.nome !== undefined) dbUpdates.nome = updates.nome;
+    if (updates.telefone !== undefined) dbUpdates.telefone = updates.telefone;
+    if (updates.email !== undefined) dbUpdates.email = updates.email;
+    if (updates.funcao !== undefined) dbUpdates.funcao = updates.funcao;
+    if (updates.clienteId !== undefined) dbUpdates.cliente_id = updates.clienteId;
+    if (updates.ativo !== undefined) dbUpdates.ativo = updates.ativo;
+
+    const { data, error } = await supabase
+        .from('contatos_clientes')
+        .update(dbUpdates)
+        .eq('id', id)
+        .select()
+        .single();
+    if (error) throw error;
+    return mapContato(data);
 }
 
 export async function deleteContato(id: string): Promise<void> {
-    await delay();
-    const index = contatos.findIndex(c => c.id === id);
-    if (index === -1) throw new Error('Contato não encontrado');
-    contatos[index].ativo = false;
+    const { error } = await supabase
+        .from('contatos_clientes')
+        .update({ ativo: false })
+        .eq('id', id);
+    if (error) throw error;
 }

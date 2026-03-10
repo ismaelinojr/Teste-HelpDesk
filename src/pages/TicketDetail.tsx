@@ -2,20 +2,13 @@ import { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
 import { calcularSLA, formatarTempo, formatarData } from '../utils/sla';
-import type { Chamado, Interacao, StatusChamado } from '../types';
+import type { Interacao, StatusChamado } from '../types';
 import {
     ArrowLeft,
     Send,
     X,
     CheckCircle2,
 } from 'lucide-react';
-
-const statusLabels: Record<StatusChamado, string> = {
-    aberto: 'Aberto',
-    em_atendimento: 'Em Atendimento',
-    aguardando_cliente: 'Aguardando Cliente',
-    fechado: 'Fechado',
-};
 
 export default function TicketDetail() {
     const { id } = useParams<{ id: string }>();
@@ -29,7 +22,10 @@ export default function TicketDetail() {
         atualizarStatus,
         encerrarChamado,
         assumirChamado,
-        getCategoriaNome, // Added getCategoriaNome
+        getCategoriaNome,
+        getStatusLabel,
+        getSLALabel,
+        statusConfigs,
     } = useApp();
 
     const [interacoes, setInteracoes] = useState<Interacao[]>([]);
@@ -105,13 +101,13 @@ export default function TicketDetail() {
                     <h1>{chamado.titulo}</h1>
                     <div className="ticket-meta">
                         <span className={`badge badge-${chamado.status}`}>
-                            {statusLabels[chamado.status]}
+                            {getStatusLabel(chamado.status)}
                         </span>
                         <span className={`badge badge-${chamado.prioridade}`}>
-                            {chamado.prioridade === 'urgente' ? '🔥 Urgente' : 'Normal'}
+                            {chamado.prioridade === 'urgente' ? '🔥 ' : ''}{getSLALabel(chamado.prioridade)}
                         </span>
                         <span style={{ color: 'var(--text-muted)', fontSize: 12 }}>
-                            {chamado.id.toUpperCase()}
+                            CH{String(chamado.numero).padStart(4, '0')}
                         </span>
                     </div>
                 </div>
@@ -128,9 +124,9 @@ export default function TicketDetail() {
                                 value={chamado.status}
                                 onChange={(e) => handleStatusChange(e.target.value as StatusChamado)}
                             >
-                                <option value="aberto">Aberto</option>
-                                <option value="em_atendimento">Em Atendimento</option>
-                                <option value="aguardando_cliente">Aguardando Cliente</option>
+                                {statusConfigs.filter(s => s.id !== 'fechado').map(s => (
+                                    <option key={s.id} value={s.id}>{s.nome}</option>
+                                ))}
                             </select>
                             <button className="btn btn-success btn-sm" onClick={() => setShowModal(true)}>
                                 <CheckCircle2 size={14} /> Encerrar

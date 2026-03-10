@@ -1,106 +1,178 @@
+import { supabase } from '../lib/supabaseClient';
 import type { Chamado, Interacao, StatusChamado } from '../types';
-import { chamados as mockChamados, interacoes as mockInteracoes, configSLA } from '../mocks/mockData';
 
-// Cópia mutável dos dados mock
-let chamados = [...mockChamados];
-let interacoes = [...mockInteracoes];
-let nextInteracaoId = interacoes.length + 1;
+// Mapeamento snake_case → camelCase
+function mapChamado(row: Record<string, unknown>): Chamado {
+    return {
+        id: row.id as string,
+        numero: row.numero as number,
+        clienteId: row.cliente_id as string,
+        contatoNome: row.contato_nome as string | undefined,
+        categoriaId: row.categoria_id as string,
+        descricao: row.descricao as string,
+        titulo: row.titulo as string,
+        status: row.status as StatusChamado,
+        prioridade: row.prioridade as string,
+        tecnicoId: (row.tecnico_id as string) || null,
+        slaHoras: row.sla_horas as number,
+        dataAbertura: row.data_abertura as string,
+        dataInicio: (row.data_inicio as string) || null,
+        dataFechamento: (row.data_fechamento as string) || null,
+        solucaoFinal: (row.solucao_final as string) || null,
+    };
+}
 
-function delay(ms = 100): Promise<void> {
-    return new Promise(resolve => setTimeout(resolve, ms));
+function mapInteracao(row: Record<string, unknown>): Interacao {
+    return {
+        id: row.id as string,
+        chamadoId: row.chamado_id as string,
+        usuarioId: row.usuario_id as string,
+        mensagem: row.mensagem as string,
+        createdAt: row.created_at as string,
+    };
 }
 
 export async function getTickets(): Promise<Chamado[]> {
-    await delay();
-    return [...chamados];
+    const { data, error } = await supabase
+        .from('chamados')
+        .select('*')
+        .order('data_abertura', { ascending: false });
+    if (error) throw error;
+    return (data ?? []).map(mapChamado);
 }
 
 export async function getTicketById(id: string): Promise<Chamado | undefined> {
-    await delay();
-    return chamados.find(c => c.id === id);
+    const { data, error } = await supabase
+        .from('chamados')
+        .select('*')
+        .eq('id', id)
+        .maybeSingle();
+    if (error) throw error;
+    return data ? mapChamado(data) : undefined;
 }
 
 export async function getTicketsByTecnico(tecnicoId: string): Promise<Chamado[]> {
-    await delay();
-    return chamados.filter(c => c.tecnicoId === tecnicoId);
+    const { data, error } = await supabase
+        .from('chamados')
+        .select('*')
+        .eq('tecnico_id', tecnicoId)
+        .order('data_abertura', { ascending: false });
+    if (error) throw error;
+    return (data ?? []).map(mapChamado);
 }
 
 export async function updateTicketStatus(id: string, status: StatusChamado): Promise<Chamado | undefined> {
-    await delay();
-    const chamado = chamados.find(c => c.id === id);
-    if (!chamado) return undefined;
+    const updates: Record<string, unknown> = { status };
 
-    chamado.status = status;
-    if (status === 'em_atendimento' && !chamado.dataInicio) {
-        chamado.dataInicio = new Date().toISOString();
+    if (status === 'aberto') {
+        updates.tecnico_id = null;
+    }
+    if (status === 'em_atendimento') {
+        // Apenas definir data_inicio se ainda não tiver
+        const existing = await getTicketById(id);
+        if (existing && !existing.dataInicio) {
+            updates.data_inicio = new Date().toISOString();
+        }
     }
     if (status === 'fechado') {
-        chamado.dataFechamento = new Date().toISOString();
+        updates.data_fechamento = new Date().toISOString();
     }
-    return { ...chamado };
+    if (status === 'programacao') {
+        updates.prioridade = 'programacao';
+        updates.sla_horas = 72;
+    }
+
+    const { data, error } = await supabase
+        .from('chamados')
+        .update(updates)
+        .eq('id', id)
+        .select()
+        .maybeSingle();
+    if (error) throw error;
+    return data ? mapChamado(data) : undefined;
 }
 
 export async function assignTechnician(id: string, tecnicoId: string): Promise<Chamado | undefined> {
-    await delay();
-    const chamado = chamados.find(c => c.id === id);
-    if (!chamado) return undefined;
-
-    chamado.tecnicoId = tecnicoId;
-    chamado.status = 'em_atendimento';
-    if (!chamado.dataInicio) {
-        chamado.dataInicio = new Date().toISOString();
+    // Verificar se já tem data_inicio
+    const existing = await getTicketById(id);
+    const updates: Record<string, unknown> = {
+        tecnico_id: tecnicoId,
+        status: 'em_atendimento',
+    };
+    if (existing && !existing.dataInicio) {
+        updates.data_inicio = new Date().toISOString();
     }
-    return { ...chamado };
+
+    const { data, error } = await supabase
+        .from('chamados')
+        .update(updates)
+        .eq('id', id)
+        .select()
+        .maybeSingle();
+    if (error) throw error;
+    return data ? mapChamado(data) : undefined;
 }
 
 export async function closeTicket(id: string, solucao: string): Promise<Chamado | undefined> {
-    await delay();
-    const chamado = chamados.find(c => c.id === id);
-    if (!chamado) return undefined;
-
-    chamado.status = 'fechado';
-    chamado.solucaoFinal = solucao;
-    chamado.dataFechamento = new Date().toISOString();
-    return { ...chamado };
+    const { data, error } = await supabase
+        .from('chamados')
+        .update({
+            status: 'fechado',
+            solucao_final: solucao,
+            data_fechamento: new Date().toISOString(),
+        })
+        .eq('id', id)
+        .select()
+        .maybeSingle();
+    if (error) throw error;
+    return data ? mapChamado(data) : undefined;
 }
 
 export async function getInteracoes(chamadoId: string): Promise<Interacao[]> {
-    await delay();
-    return interacoes
-        .filter(i => i.chamadoId === chamadoId)
-        .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+    const { data, error } = await supabase
+        .from('interacoes')
+        .select('*')
+        .eq('chamado_id', chamadoId)
+        .order('created_at', { ascending: true });
+    if (error) throw error;
+    return (data ?? []).map(mapInteracao);
 }
 
 export async function addInteracao(chamadoId: string, usuarioId: string, mensagem: string): Promise<Interacao> {
-    await delay();
-    const novaInteracao: Interacao = {
-        id: `i${nextInteracaoId++}`,
-        chamadoId,
-        usuarioId,
-        mensagem,
-        createdAt: new Date().toISOString(),
-    };
-    interacoes.push(novaInteracao);
-    return { ...novaInteracao };
+    const { data, error } = await supabase
+        .from('interacoes')
+        .insert({
+            chamado_id: chamadoId,
+            usuario_id: usuarioId,
+            mensagem,
+        })
+        .select()
+        .single();
+    if (error) throw error;
+    return mapInteracao(data);
 }
 
-export async function createTicket(data: Omit<Chamado, 'id' | 'dataAbertura' | 'dataInicio' | 'dataFechamento' | 'solucaoFinal'>): Promise<Chamado> {
-    await delay();
-    const newTicket: Chamado = {
-        ...data,
-        id: `ch${chamados.length + 1}`,
-        slaHoras: data.prioridade === 'urgente' ? configSLA.urgente : configSLA.normal,
-        dataAbertura: new Date().toISOString(),
-        dataInicio: null,
-        dataFechamento: null,
-        solucaoFinal: null,
-    };
-    chamados.push(newTicket);
-    return { ...newTicket };
+export async function createTicket(ticketData: Omit<Chamado, 'id' | 'numero' | 'dataAbertura' | 'dataInicio' | 'dataFechamento' | 'solucaoFinal'>): Promise<Chamado> {
+    const { data, error } = await supabase
+        .from('chamados')
+        .insert({
+            cliente_id: ticketData.clienteId,
+            contato_nome: ticketData.contatoNome,
+            categoria_id: ticketData.categoriaId,
+            titulo: ticketData.titulo,
+            descricao: ticketData.descricao,
+            status: ticketData.status,
+            prioridade: ticketData.prioridade,
+            tecnico_id: ticketData.tecnicoId,
+            sla_horas: ticketData.slaHoras,
+        })
+        .select()
+        .single();
+    if (error) throw error;
+    return mapChamado(data);
 }
 
 export function resetData() {
-    chamados = [...mockChamados];
-    interacoes = [...mockInteracoes];
-    nextInteracaoId = interacoes.length + 1;
+    // Não aplicável com Supabase — dados são persistentes
+    console.warn('resetData() não é suportado com Supabase');
 }

@@ -1,12 +1,15 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
-import { LogIn, Mail, Lock, AlertCircle, Loader2 } from 'lucide-react';
+import { resetPassword } from '../services/authService';
+import { LogIn, Mail, Lock, AlertCircle, Loader2, Send, ArrowLeft } from 'lucide-react';
 
 const LoginPage: React.FC = () => {
+    const [view, setView] = useState<'login' | 'forgot_password'>('login');
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [error, setError] = useState<string | null>(null);
+    const [successMsg, setSuccessMsg] = useState<string | null>(null);
     const [isLoggingIn, setIsLoggingIn] = useState(false);
     const { login } = useApp();
     const navigate = useNavigate();
@@ -14,19 +17,42 @@ const LoginPage: React.FC = () => {
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setError(null);
+        setSuccessMsg(null);
         setIsLoggingIn(true);
 
         try {
-            // Pequeno delay para simular rede
-            await new Promise(resolve => setTimeout(resolve, 800));
             const success = await login(email, password);
             if (success) {
                 navigate('/');
             } else {
-                setError('Credenciais inválidas. Tente ismael@helpdesk.com');
+                setError('Credenciais inválidas. Verifique seu e-mail e senha.');
             }
         } catch (err) {
-            setError('Ocorreu um erro ao tentar entrar.');
+            setError('Ocorreu um erro ao tentar entrar. Tente novamente.');
+        } finally {
+            setIsLoggingIn(false);
+        }
+    };
+
+    const handleForgotPassword = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!email) {
+            setError('Por favor, informe seu e-mail.');
+            return;
+        }
+        setError(null);
+        setIsLoggingIn(true);
+
+        try {
+            await resetPassword(email);
+            setSuccessMsg('Se o e-mail existir, você receberá um link de recuperação em instantes.');
+            setTimeout(() => {
+                setView('login');
+                setSuccessMsg(null);
+                setPassword('');
+            }, 3000);
+        } catch (err) {
+            setError('Ocorreu um erro. Tente novamente.');
         } finally {
             setIsLoggingIn(false);
         }
@@ -154,6 +180,19 @@ const LoginPage: React.FC = () => {
                     animation: shake 0.4s cubic-bezier(.36,.07,.19,.97) both;
                 }
 
+                .success-message {
+                    background: rgba(166, 227, 161, 0.1);
+                    border: 1px solid rgba(166, 227, 161, 0.2);
+                    border-radius: 12px;
+                    padding: 12px;
+                    display: flex;
+                    align-items: center;
+                    gap: 10px;
+                    color: #a6e3a1;
+                    font-size: 13px;
+                    margin-bottom: 20px;
+                }
+
                 @keyframes shake {
                     10%, 90% { transform: translate3d(-1px, 0, 0); }
                     20%, 80% { transform: translate3d(2px, 0, 0); }
@@ -194,6 +233,32 @@ const LoginPage: React.FC = () => {
                     transform: none;
                 }
 
+                .text-button {
+                    background: none;
+                    border: none;
+                    color: #89b4fa;
+                    font-size: 13px;
+                    cursor: pointer;
+                    padding: 0;
+                    margin-top: 16px;
+                    display: flex;
+                    align-items: center;
+                    gap: 6px;
+                    transition: color 0.2s;
+                }
+                
+                .text-button:hover {
+                    color: #cba6f7;
+                    text-decoration: underline;
+                }
+                
+                .forgot-password-link {
+                    display: block;
+                    text-align: right;
+                    margin-top: 8px;
+                    margin-bottom: -10px;
+                }
+
                 .footer-text {
                     text-align: center;
                     margin-top: 24px;
@@ -216,8 +281,8 @@ const LoginPage: React.FC = () => {
                     <div className="logo-wrapper">
                         <LogIn size={32} color="#1e1e2e" />
                     </div>
-                    <h1>Help Desk TI</h1>
-                    <p>Acesse sua conta para gerenciar chamados</p>
+                    <h1>I9Chamados</h1>
+                    <p>{view === 'login' ? 'Acesse sua conta para gerenciar chamados' : 'Recuperação de senha'}</p>
                 </div>
 
                 {error && (
@@ -227,56 +292,108 @@ const LoginPage: React.FC = () => {
                     </div>
                 )}
 
-                <form onSubmit={handleSubmit}>
-                    <div className="form-group">
-                        <label className="input-label">E-mail</label>
-                        <div className="input-wrapper">
-                            <Mail size={18} className="input-icon" />
-                            <input
-                                type="email"
-                                className="login-input"
-                                placeholder="seu@email.com"
-                                value={email}
-                                onChange={(e) => setEmail(e.target.value)}
-                                required
-                                disabled={isLoggingIn}
-                            />
-                        </div>
+                {successMsg && (
+                    <div className="success-message">
+                        <AlertCircle size={18} />
+                        <span>{successMsg}</span>
                     </div>
+                )}
 
-                    <div className="form-group">
-                        <label className="input-label">Senha</label>
-                        <div className="input-wrapper">
-                            <Lock size={18} className="input-icon" />
-                            <input
-                                type="password"
-                                className="login-input"
-                                placeholder="••••••••"
-                                value={password}
-                                onChange={(e) => setPassword(e.target.value)}
-                                required
-                                disabled={isLoggingIn}
-                            />
+                {view === 'login' ? (
+                    <form onSubmit={handleSubmit}>
+                        <div className="form-group">
+                            <label className="input-label">E-mail</label>
+                            <div className="input-wrapper">
+                                <Mail size={18} className="input-icon" />
+                                <input
+                                    type="email"
+                                    className="login-input"
+                                    placeholder="seu@email.com"
+                                    value={email}
+                                    onChange={(e) => setEmail(e.target.value)}
+                                    required
+                                    disabled={isLoggingIn}
+                                />
+                            </div>
                         </div>
-                    </div>
 
-                    <button type="submit" className="submit-button" disabled={isLoggingIn}>
-                        {isLoggingIn ? (
-                            <>
-                                <Loader2 size={18} className="animate-spin" />
-                                Entrando...
-                            </>
-                        ) : (
-                            <>
-                                Entrar no Sistema
-                                <LogIn size={18} />
-                            </>
-                        )}
-                    </button>
-                </form>
+                        <div className="form-group">
+                            <label className="input-label">Senha</label>
+                            <div className="input-wrapper">
+                                <Lock size={18} className="input-icon" />
+                                <input
+                                    type="password"
+                                    className="login-input"
+                                    placeholder="••••••••"
+                                    value={password}
+                                    onChange={(e) => setPassword(e.target.value)}
+                                    required
+                                    disabled={isLoggingIn}
+                                />
+                            </div>
+                            <div className="forgot-password-link">
+                                <button type="button" className="text-button" onClick={() => { setView('forgot_password'); setError(null); }} style={{ margin: '8px 0 0 auto' }}>
+                                    Esqueci minha senha
+                                </button>
+                            </div>
+                        </div>
+
+                        <button type="submit" className="submit-button" disabled={isLoggingIn}>
+                            {isLoggingIn ? (
+                                <>
+                                    <Loader2 size={18} className="animate-spin" />
+                                    Entrando...
+                                </>
+                            ) : (
+                                <>
+                                    Entrar no Sistema
+                                    <LogIn size={18} />
+                                </>
+                            )}
+                        </button>
+                    </form>
+                ) : (
+                    <form onSubmit={handleForgotPassword}>
+                        <div className="form-group">
+                            <label className="input-label">E-mail cadastrado</label>
+                            <div className="input-wrapper">
+                                <Mail size={18} className="input-icon" />
+                                <input
+                                    type="email"
+                                    className="login-input"
+                                    placeholder="seu@email.com"
+                                    value={email}
+                                    onChange={(e) => setEmail(e.target.value)}
+                                    required
+                                    disabled={isLoggingIn}
+                                />
+                            </div>
+                        </div>
+
+                        <button type="submit" className="submit-button" disabled={isLoggingIn}>
+                            {isLoggingIn ? (
+                                <>
+                                    <Loader2 size={18} className="animate-spin" />
+                                    Enviando...
+                                </>
+                            ) : (
+                                <>
+                                    Enviar Link de Recuperação
+                                    <Send size={18} />
+                                </>
+                            )}
+                        </button>
+
+                        <div style={{ display: 'flex', justifyContent: 'center' }}>
+                            <button type="button" className="text-button" onClick={() => { setView('login'); setError(null); setSuccessMsg(null); }} disabled={isLoggingIn}>
+                                <ArrowLeft size={16} /> Voltar para o login
+                            </button>
+                        </div>
+                    </form>
+                )}
 
                 <div className="footer-text">
-                    &copy; 2026 Help Desk TI - Versão MVP
+                    &copy; 2026 I9Chamados - Versão MVP
                 </div>
             </div>
         </div>

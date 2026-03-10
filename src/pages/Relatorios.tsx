@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { useApp } from '../context/AppContext';
-import { FileBarChart, Presentation, Printer } from 'lucide-react';
+import { FileBarChart, Presentation } from 'lucide-react';
 import IndicadoresInternos from '../components/reports/IndicadoresInternos';
 import GeradorPDFCliente from '../components/reports/GeradorPDFCliente';
 
@@ -10,7 +10,7 @@ export default function Relatorios() {
     const { currentUser } = useApp();
     const [activeTab, setActiveTab] = useState<DashboardTab>('interna');
 
-    if (currentUser.role !== 'admin') {
+    if (!currentUser || currentUser.role !== 'admin') {
         return (
             <div className="container" style={{ padding: 40, textAlign: 'center' }}>
                 <h2>Acesso Negado</h2>

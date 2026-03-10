@@ -9,9 +9,9 @@ export default defineConfig({
       registerType: 'autoUpdate',
       includeAssets: ['vite.svg'],
       manifest: {
-        name: 'Help Desk TI - Gestão de Chamados',
-        short_name: 'Help Desk TI',
-        description: 'Sistema de Gestão de Chamados de Suporte Técnico',
+        name: 'I9Chamados - Gestão de Chamados',
+        short_name: 'I9Chamados',
+        description: 'I9Chamados - Sistema de Gestão de Chamados de Suporte Técnico',
         theme_color: '#0f1117',
         background_color: '#0f1117',
         display: 'standalone',

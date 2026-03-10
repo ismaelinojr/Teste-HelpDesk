@@ -3,7 +3,7 @@ import type { Chamado, SLAInfo, SLAStatus } from '../types';
 export function calcularSLA(chamado: Chamado): SLAInfo {
     // Chamados fechados: calcular com base no tempo real de resolução
     if (chamado.status === 'fechado' && chamado.dataFechamento) {
-        const inicio = new Date(chamado.dataInicio || chamado.dataAbertura).getTime();
+        const inicio = new Date(chamado.dataAbertura).getTime();
         const fim = new Date(chamado.dataFechamento).getTime();
         const tempoTotalMs = chamado.slaHoras * 60 * 60 * 1000;
         const tempoDecorridoMs = fim - inicio;
@@ -24,7 +24,7 @@ export function calcularSLA(chamado: Chamado): SLAInfo {
 
     // Chamados em andamento: calcular em tempo real
     const agora = Date.now();
-    const inicio = new Date(chamado.dataInicio || chamado.dataAbertura).getTime();
+    const inicio = new Date(chamado.dataAbertura).getTime();
     const tempoTotalMs = chamado.slaHoras * 60 * 60 * 1000;
     const tempoDecorridoMs = agora - inicio;
     const tempoRestanteMs = tempoTotalMs - tempoDecorridoMs;

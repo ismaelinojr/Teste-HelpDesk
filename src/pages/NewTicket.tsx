@@ -5,13 +5,17 @@ import type { Prioridade, ContatoCliente } from '../types';
 import { ArrowLeft, Save } from 'lucide-react';
 
 export default function NewTicket() {
-    const { clientes, criarChamado, getContatosByCliente, addContato, categoriasChamado } = useApp();
+    const { clientes, criarChamado, getContatosByCliente, addContato, categoriasChamado, slaConfigs } = useApp();
     const navigate = useNavigate();
 
     const [clienteId, setClienteId] = useState('');
     const [contatos, setContatos] = useState<ContatoCliente[]>([]);
     const [contatoId, setContatoId] = useState('');
+
+    // Novos campos de contato
     const [novoContatoNome, setNovoContatoNome] = useState('');
+    const [novoContatoTelefone, setNovoContatoTelefone] = useState('');
+
     const [titulo, setTitulo] = useState('');
     const [descricao, setDescricao] = useState('');
     const [categoriaId, setCategoriaId] = useState('');
@@ -24,6 +28,7 @@ export default function NewTicket() {
             setContatos([]);
             setContatoId('');
             setNovoContatoNome('');
+            setNovoContatoTelefone('');
             return;
         }
         getContatosByCliente(clienteId).then(data => setContatos(data));
@@ -37,8 +42,8 @@ export default function NewTicket() {
         let contatoNome = undefined;
         if (contatoId === 'outro' && novoContatoNome.trim()) {
             contatoNome = novoContatoNome.trim();
-            // Automatically add this new contact to the mock DB for future use
-            await addContato(clienteId, contatoNome);
+            // Automatically add this new contact to the mock DB for future use with phone
+            await addContato(clienteId, contatoNome, novoContatoTelefone.trim() || undefined);
         } else if (contatoId) {
             const selectedContact = contatos.find(c => c.id === contatoId);
             if (selectedContact) contatoNome = selectedContact.nome;
@@ -60,11 +65,12 @@ export default function NewTicket() {
             <div className="new-ticket-form">
                 <form onSubmit={handleSubmit}>
                     <div className="form-group">
-                        <label>Cliente (Laboratório) *</label>
+                        <label>Laboratório *</label>
                         <select value={clienteId} onChange={(e) => {
                             setClienteId(e.target.value);
                             setContatoId('');
                             setNovoContatoNome('');
+                            setNovoContatoTelefone('');
                         }} required>
                             <option value="">Selecione o laboratório...</option>
                             {clientes.map(c => (
@@ -90,15 +96,32 @@ export default function NewTicket() {
                     </div>
 
                     {contatoId === 'outro' && (
-                        <div className="form-group slide-down">
-                            <label>Nome do novo colaborador *</label>
-                            <input
-                                type="text"
-                                value={novoContatoNome}
-                                onChange={(e) => setNovoContatoNome(e.target.value)}
-                                placeholder="Digite o nome de quem solicitou..."
-                                required
-                            />
+                        <div className="admin-card slide-down" style={{ marginTop: 0, marginBottom: 16, padding: 16, border: '1px solid var(--border)', background: 'var(--bg-card)' }}>
+                            <h4 style={{ margin: '0 0 12px 0', fontSize: 13, color: 'var(--text-secondary)' }}>Dados do Novo Colaborador</h4>
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+                                <div className="form-group" style={{ marginBottom: 0 }}>
+                                    <label>Nome Completo *</label>
+                                    <input
+                                        type="text"
+                                        value={novoContatoNome}
+                                        onChange={(e) => setNovoContatoNome(e.target.value)}
+                                        placeholder="Ex: João da Silva"
+                                        required
+                                    />
+                                </div>
+                                <div className="form-group" style={{ marginBottom: 0 }}>
+                                    <label>Telefone / WhatsApp</label>
+                                    <input
+                                        type="text"
+                                        value={novoContatoTelefone}
+                                        onChange={(e) => setNovoContatoTelefone(e.target.value)}
+                                        placeholder="(11) 99999-9999"
+                                    />
+                                </div>
+                            </div>
+                            <p style={{ fontSize: 11, color: 'var(--text-muted)', margin: '12px 0 0 0' }}>
+                                Este colaborador será salvo automaticamente na tabela deste laboratório para os próximos chamados.
+                            </p>
                         </div>
                     )}
 
@@ -134,10 +157,13 @@ export default function NewTicket() {
                     </div>
 
                     <div className="form-group">
-                        <label>Prioridade</label>
+                        <label>Prioridade / SLA</label>
                         <select value={prioridade} onChange={(e) => setPrioridade(e.target.value as Prioridade)}>
-                            <option value="normal">📋 Normal (24h)</option>
-                            <option value="urgente">🔥 Urgente (4h)</option>
+                            {slaConfigs.map(sla => (
+                                <option key={sla.id} value={sla.id}>
+                                    {sla.nome} ({sla.horas}h)
+                                </option>
+                            ))}
                         </select>
                     </div>
 

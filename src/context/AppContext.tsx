@@ -1,37 +1,44 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import type { Chamado, Usuario, Cliente, Interacao, ConfigSLA, StatusChamado, ContatoCliente, CategoriaChamado } from '../types';
+import type { Chamado, Usuario, Cliente, Interacao, StatusChamado, ContatoCliente, CategoriaChamado, StatusConfig, SLAConfig } from '../types';
 import * as ticketService from '../services/ticketService';
 import * as clientService from '../services/clientService';
 import * as userService from '../services/userService';
 import * as categoryService from '../services/categoryService';
-import { configSLA as defaultConfig } from '../mocks/mockData';
+import * as statusService from '../services/statusService';
+import * as slaService from '../services/slaService';
+import * as authService from '../services/authService';
 
 interface AppState {
     chamados: Chamado[];
     usuarios: Usuario[];
     clientes: Cliente[];
+    contatosClientes: ContatoCliente[];
     categoriasChamado: CategoriaChamado[];
+    statusConfigs: StatusConfig[];
+    slaConfigs: SLAConfig[];
     currentUser: Usuario | null;
     isAuthenticated: boolean;
-    configSLA: ConfigSLA;
     loading: boolean;
 }
 
 interface AppContextType extends AppState {
     switchUser: (userId: string) => void;
     login: (email: string, password: string) => Promise<boolean>;
-    logout: () => void;
+    logout: () => void | Promise<void>;
     assumirChamado: (chamadoId: string) => Promise<void>;
     atualizarStatus: (chamadoId: string, status: StatusChamado) => Promise<void>;
     encerrarChamado: (chamadoId: string, solucao: string) => Promise<void>;
     adicionarNota: (chamadoId: string, mensagem: string) => Promise<Interacao>;
     getInteracoes: (chamadoId: string) => Promise<Interacao[]>;
-    criarChamado: (data: { clienteId: string; contatoNome?: string; categoriaId: string; titulo: string; descricao: string; prioridade: 'normal' | 'urgente' }) => Promise<void>;
-    atualizarConfigSLA: (config: ConfigSLA) => void;
+    criarChamado: (data: { clienteId: string; contatoNome?: string; categoriaId: string; titulo: string; descricao: string; prioridade: string }) => Promise<void>;
     refreshChamados: () => Promise<void>;
     getClienteNome: (id: string) => string;
     getTecnicoNome: (id: string | null) => string;
     getCategoriaNome: (id: string) => string;
+    getStatusLabel: (id: string) => string;
+    getStatusConfig: (id: string) => StatusConfig | undefined;
+    getSLAConfig: (id: string) => SLAConfig | undefined;
+    getSLALabel: (id: string) => string;
     getChamadosFiltrados: () => Chamado[];
     getContatosByCliente: (clienteId: string) => Promise<ContatoCliente[]>;
     addContato: (clienteId: string, nome: string, telefone?: string, email?: string, funcao?: string) => Promise<ContatoCliente>;
@@ -49,6 +56,14 @@ interface AppContextType extends AppState {
     addCategoria: (categoria: Omit<CategoriaChamado, 'id'>) => Promise<CategoriaChamado>;
     updateCategoria: (id: string, data: Partial<CategoriaChamado>) => Promise<CategoriaChamado>;
     deleteCategoria: (id: string) => Promise<void>;
+
+    addStatus: (status: Omit<StatusConfig, 'id'>) => Promise<StatusConfig>;
+    updateStatus: (id: string, data: Partial<StatusConfig>) => Promise<StatusConfig>;
+    deleteStatus: (id: string) => Promise<void>;
+
+    addSLA: (sla: Omit<SLAConfig, 'id'>) => Promise<SLAConfig>;
+    updateSLA: (id: string, data: Partial<SLAConfig>) => Promise<SLAConfig>;
+    deleteSLA: (id: string) => Promise<void>;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -58,26 +73,102 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         chamados: [],
         usuarios: [],
         clientes: [],
+        contatosClientes: [],
         categoriasChamado: [],
+        statusConfigs: [],
+        slaConfigs: [],
         currentUser: null,
         isAuthenticated: false,
-        configSLA: defaultConfig,
         loading: true,
     });
 
+    // Carrega todos os dados do Supabase
     const loadData = useCallback(async () => {
-        setState(prev => ({ ...prev, loading: true }));
-        const [chamados, usuarios, clientes, categorias] = await Promise.all([
-            ticketService.getTickets(),
-            userService.getUsers(),
-            clientService.getClients(),
-            categoryService.getCategorias(),
-        ]);
-        setState(prev => ({ ...prev, chamados, usuarios, clientes, categoriasChamado: categorias, loading: false }));
+        try {
+            const pChamados = ticketService.getTickets();
+            const pUsuarios = userService.getUsers();
+            const pClientes = clientService.getClients();
+            const pCategorias = categoryService.getCategorias();
+            const pStatuses = statusService.getStatuses();
+            const pSlas = slaService.getSLAs();
+            const pContatos = clientService.getAllContatos();
+
+            const [chamados, usuarios, clientes, categorias, statuses, slas, contatos] = await Promise.all([
+                pChamados, pUsuarios, pClientes, pCategorias, pStatuses, pSlas, pContatos
+            ]);
+            setState(prev => ({
+                ...prev,
+                chamados,
+                usuarios,
+                clientes,
+                contatosClientes: contatos,
+                categoriasChamado: categorias,
+                statusConfigs: statuses,
+                slaConfigs: slas,
+                loading: false,
+            }));
+        } catch (err) {
+            console.error('Erro ao carregar dados:', err);
+            setState(prev => ({ ...prev, loading: false }));
+        }
     }, []);
 
+    // Listener de autenticação do Supabase
     useEffect(() => {
-        loadData();
+        let isMounted = true;
+
+        // Verificar sessão existente ao montar
+        const initAuth = async () => {
+            try {
+                const session = await authService.getCurrentSession();
+                if (session?.user && isMounted) {
+                    const usuario = await userService.getUserByAuthId(session.user.id);
+                    if (usuario) {
+                        setState(prev => ({
+                            ...prev,
+                            currentUser: usuario,
+                            isAuthenticated: true,
+                        }));
+                    }
+                }
+            } catch (err) {
+                console.error('Erro ao verificar sessão:', err);
+            }
+            if (isMounted) {
+                // Carrega dados após verificar auth
+                loadData();
+            }
+        };
+
+        initAuth();
+
+        // Escutar mudanças no estado de autenticação
+        const subscription = authService.onAuthStateChange(async (event, session) => {
+            if (!isMounted) return;
+
+            if (event === 'SIGNED_OUT') {
+                setState(prev => ({
+                    ...prev,
+                    currentUser: null,
+                    isAuthenticated: false,
+                }));
+            } else if (event === 'SIGNED_IN' && session?.user) {
+                const usuario = await userService.getUserByAuthId(session.user.id);
+                if (usuario && isMounted) {
+                    setState(prev => ({
+                        ...prev,
+                        currentUser: usuario,
+                        isAuthenticated: true,
+                    }));
+                    loadData();
+                }
+            }
+        });
+
+        return () => {
+            isMounted = false;
+            subscription.unsubscribe();
+        };
     }, [loadData]);
 
     const switchUser = useCallback((userId: string) => {
@@ -87,17 +178,31 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         }
     }, [state.usuarios]);
 
-    const login = useCallback(async (email: string, _password: string) => {
-        // Simulação de login: busca o usuário pelo e-mail nos mocks
-        const user = state.usuarios.find(u => u.email === email);
-        if (user) {
-            setState(prev => ({ ...prev, currentUser: user, isAuthenticated: true }));
-            return true;
+    const login = useCallback(async (email: string, password: string) => {
+        try {
+            const { user } = await authService.signIn(email, password);
+            if (user) {
+                const usuario = await userService.getUserByAuthId(user.id);
+                if (usuario) {
+                    setState(prev => ({ ...prev, currentUser: usuario, isAuthenticated: true }));
+                    // Recarregar dados após login
+                    loadData();
+                    return true;
+                }
+            }
+            return false;
+        } catch (err) {
+            console.error('Erro no login:', err);
+            return false;
         }
-        return false;
-    }, [state.usuarios]);
+    }, [loadData]);
 
-    const logout = useCallback(() => {
+    const logout = useCallback(async () => {
+        try {
+            await authService.signOut();
+        } catch (err) {
+            console.error('Erro no logout:', err);
+        }
         setState(prev => ({ ...prev, currentUser: null, isAuthenticated: false }));
     }, []);
 
@@ -116,15 +221,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     const atualizarStatus = useCallback(async (chamadoId: string, status: StatusChamado) => {
         if (!state.currentUser) return;
         await ticketService.updateTicketStatus(chamadoId, status);
-        const labels: Record<StatusChamado, string> = {
-            aberto: 'Aberto',
-            em_atendimento: 'Em Atendimento',
-            aguardando_cliente: 'Aguardando Cliente',
-            fechado: 'Fechado',
-        };
-        await ticketService.addInteracao(chamadoId, state.currentUser.id, `Status alterado para: ${labels[status]}`);
+        const statusConfig = state.statusConfigs.find(s => s.id === status);
+        const label = statusConfig?.nome || status;
+        await ticketService.addInteracao(chamadoId, state.currentUser.id, `Status alterado para: ${label}`);
         await refreshChamados();
-    }, [state.currentUser, refreshChamados]);
+    }, [state.currentUser, state.statusConfigs, refreshChamados]);
 
     const encerrarChamado = useCallback(async (chamadoId: string, solucao: string) => {
         if (!state.currentUser) return;
@@ -143,8 +244,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         return ticketService.getInteracoes(chamadoId);
     }, []);
 
-    const criarChamado = useCallback(async (data: { clienteId: string; contatoNome?: string; categoriaId: string; titulo: string; descricao: string; prioridade: 'normal' | 'urgente' }) => {
-        const slaHoras = data.prioridade === 'urgente' ? state.configSLA.urgente : state.configSLA.normal;
+    const criarChamado = useCallback(async (data: { clienteId: string; contatoNome?: string; categoriaId: string; titulo: string; descricao: string; prioridade: string }) => {
+        const slaConfig = state.slaConfigs.find(s => s.id === data.prioridade);
+        const slaHoras = slaConfig?.horas || 24;
         await ticketService.createTicket({
             ...data,
             status: 'aberto',
@@ -152,11 +254,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             slaHoras,
         });
         await refreshChamados();
-    }, [state.configSLA, refreshChamados]);
-
-    const atualizarConfigSLA = useCallback((config: ConfigSLA) => {
-        setState(prev => ({ ...prev, configSLA: config }));
-    }, []);
+    }, [state.slaConfigs, refreshChamados]);
 
     const getClienteNome = useCallback((id: string) => {
         return state.clientes.find(c => c.id === id)?.nome || 'Desconhecido';
@@ -171,10 +269,26 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         return state.categoriasChamado.find(c => c.id === id)?.nome || 'Desconhecido';
     }, [state.categoriasChamado]);
 
+    const getStatusLabel = useCallback((id: string) => {
+        return state.statusConfigs.find(s => s.id === id)?.nome || id;
+    }, [state.statusConfigs]);
+
+    const getStatusConfig = useCallback((id: string) => {
+        return state.statusConfigs.find(s => s.id === id);
+    }, [state.statusConfigs]);
+
+    const getSLAConfig = useCallback((id: string) => {
+        return state.slaConfigs.find(s => s.id === id);
+    }, [state.slaConfigs]);
+
+    const getSLALabel = useCallback((id: string) => {
+        return state.slaConfigs.find(s => s.id === id)?.nome || id;
+    }, [state.slaConfigs]);
+
     const getChamadosFiltrados = useCallback(() => {
         if (!state.currentUser) return [];
         if (state.currentUser.role === 'admin') return state.chamados;
-        return state.chamados.filter(c => c.tecnicoId === state.currentUser.id);
+        return state.chamados.filter(c => c.tecnicoId === state.currentUser!.id);
     }, [state.chamados, state.currentUser]);
 
     const getContatosByCliente = useCallback(async (clienteId: string) => {
@@ -182,15 +296,26 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }, []);
 
     const addContato = useCallback(async (clienteId: string, nome: string, telefone?: string, email?: string, funcao?: string) => {
-        return await clientService.addContato(clienteId, nome, telefone, email, funcao);
+        const novo = await clientService.addContato(clienteId, nome, telefone, email, funcao);
+        setState(prev => ({ ...prev, contatosClientes: [...prev.contatosClientes, novo] }));
+        return novo;
     }, []);
 
     const updateContato = useCallback(async (id: string, data: Partial<ContatoCliente>) => {
-        return await clientService.updateContato(id, data);
+        const atualizado = await clientService.updateContato(id, data);
+        setState(prev => ({
+            ...prev,
+            contatosClientes: prev.contatosClientes.map(c => c.id === id ? atualizado : c)
+        }));
+        return atualizado;
     }, []);
 
     const deleteContato = useCallback(async (id: string) => {
-        return await clientService.deleteContato(id);
+        await clientService.deleteContato(id);
+        setState(prev => ({
+            ...prev,
+            contatosClientes: prev.contatosClientes.filter(c => c.id !== id)
+        }));
     }, []);
 
     const addCliente = useCallback(async (cliente: Omit<Cliente, 'id'>) => {
@@ -212,7 +337,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         await clientService.deleteCliente(id);
         setState(prev => ({
             ...prev,
-            clientes: prev.clientes.filter(c => c.id !== id) // removemos da lista visualmente
+            clientes: prev.clientes.filter(c => c.id !== id)
         }));
     }, []);
 
@@ -262,6 +387,54 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         }));
     }, []);
 
+    // ===== STATUS CRUD =====
+    const addStatus = useCallback(async (status: Omit<StatusConfig, 'id'>) => {
+        const novo = await statusService.addStatus(status);
+        setState(prev => ({ ...prev, statusConfigs: [...prev.statusConfigs, novo] }));
+        return novo;
+    }, []);
+
+    const updateStatus = useCallback(async (id: string, data: Partial<StatusConfig>) => {
+        const atualizado = await statusService.updateStatus(id, data);
+        setState(prev => ({
+            ...prev,
+            statusConfigs: prev.statusConfigs.map(s => s.id === id ? atualizado : s)
+        }));
+        return atualizado;
+    }, []);
+
+    const deleteStatus = useCallback(async (id: string) => {
+        await statusService.deleteStatus(id);
+        setState(prev => ({
+            ...prev,
+            statusConfigs: prev.statusConfigs.filter(s => s.id !== id)
+        }));
+    }, []);
+
+    // ===== SLA CRUD =====
+    const addSLA = useCallback(async (sla: Omit<SLAConfig, 'id'>) => {
+        const novo = await slaService.addSLA(sla);
+        setState(prev => ({ ...prev, slaConfigs: [...prev.slaConfigs, novo] }));
+        return novo;
+    }, []);
+
+    const updateSLA = useCallback(async (id: string, data: Partial<SLAConfig>) => {
+        const atualizado = await slaService.updateSLA(id, data);
+        setState(prev => ({
+            ...prev,
+            slaConfigs: prev.slaConfigs.map(s => s.id === id ? atualizado : s)
+        }));
+        return atualizado;
+    }, []);
+
+    const deleteSLA = useCallback(async (id: string) => {
+        await slaService.deleteSLA(id);
+        setState(prev => ({
+            ...prev,
+            slaConfigs: prev.slaConfigs.filter(s => s.id !== id)
+        }));
+    }, []);
+
     return (
         <AppContext.Provider value={{
             ...state,
@@ -274,11 +447,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             adicionarNota,
             getInteracoes,
             criarChamado,
-            atualizarConfigSLA,
             refreshChamados,
             getClienteNome,
             getTecnicoNome,
             getCategoriaNome,
+            getStatusLabel,
+            getStatusConfig,
+            getSLAConfig,
+            getSLALabel,
             getChamadosFiltrados,
             getContatosByCliente,
             addContato,
@@ -293,6 +469,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             addCategoria,
             updateCategoria,
             deleteCategoria,
+            addStatus,
+            updateStatus,
+            deleteStatus,
+            addSLA,
+            updateSLA,
+            deleteSLA,
         }}>
             {children}
         </AppContext.Provider>
