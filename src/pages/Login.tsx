@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
+import { resetPassword } from '../services/authService';
 import { LogIn, Mail, Lock, AlertCircle, Loader2, Send, ArrowLeft } from 'lucide-react';
 
 const LoginPage: React.FC = () => {
@@ -20,16 +21,14 @@ const LoginPage: React.FC = () => {
         setIsLoggingIn(true);
 
         try {
-            // Pequeno delay para simular rede
-            await new Promise(resolve => setTimeout(resolve, 800));
             const success = await login(email, password);
             if (success) {
                 navigate('/');
             } else {
-                setError('Credenciais inválidas. Tente ismael@i9chamados.com');
+                setError('Credenciais inválidas. Verifique seu e-mail e senha.');
             }
         } catch (err) {
-            setError('Ocorreu um erro ao tentar entrar.');
+            setError('Ocorreu um erro ao tentar entrar. Tente novamente.');
         } finally {
             setIsLoggingIn(false);
         }
@@ -45,7 +44,7 @@ const LoginPage: React.FC = () => {
         setIsLoggingIn(true);
 
         try {
-            await new Promise(resolve => setTimeout(resolve, 1000));
+            await resetPassword(email);
             setSuccessMsg('Se o e-mail existir, você receberá um link de recuperação em instantes.');
             setTimeout(() => {
                 setView('login');

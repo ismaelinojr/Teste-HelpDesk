@@ -237,7 +237,7 @@ export default function Dashboard() {
                                 const sla = chamado.status !== 'fechado' ? calcularSLA(chamado) : null;
                                 return (
                                     <tr key={chamado.id} onClick={() => navigate(`/chamado/${chamado.id}`)}>
-                                        <td className="td-id">{chamado.id.toUpperCase()}</td>
+                                        <td className="td-id">CH{String(chamado.numero).padStart(4, '0')}</td>
                                         <td className="td-titulo">{chamado.titulo}</td>
                                         <td className="td-cliente">{getClienteNome(chamado.clienteId)}</td>
                                         <td>

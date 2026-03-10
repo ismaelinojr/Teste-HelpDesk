@@ -59,6 +59,7 @@ export interface CategoriaChamado {
 
 export interface Chamado {
   id: string;
+  numero: number;
   clienteId: string;
   contatoNome?: string;
   categoriaId: string;

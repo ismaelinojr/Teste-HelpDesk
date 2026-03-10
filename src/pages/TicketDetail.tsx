@@ -107,7 +107,7 @@ export default function TicketDetail() {
                             {chamado.prioridade === 'urgente' ? '🔥 ' : ''}{getSLALabel(chamado.prioridade)}
                         </span>
                         <span style={{ color: 'var(--text-muted)', fontSize: 12 }}>
-                            {chamado.id.toUpperCase()}
+                            CH{String(chamado.numero).padStart(4, '0')}
                         </span>
                     </div>
                 </div>

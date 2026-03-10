@@ -1,41 +1,49 @@
+import { supabase } from '../lib/supabaseClient';
 import type { SLAConfig } from '../types';
-import { slaConfigs as mockSLAs } from '../mocks/mockData';
-
-let slas = [...mockSLAs];
-
-function delay(ms = 100): Promise<void> {
-    return new Promise(resolve => setTimeout(resolve, ms));
-}
 
 export async function getSLAs(): Promise<SLAConfig[]> {
-    await delay();
-    return slas.filter(s => s.ativo !== false);
+    const { data, error } = await supabase
+        .from('sla_configs')
+        .select('*')
+        .eq('ativo', true);
+    if (error) throw error;
+    return data ?? [];
 }
 
 export async function getAllSLAs(): Promise<SLAConfig[]> {
-    await delay();
-    return [...slas];
+    const { data, error } = await supabase
+        .from('sla_configs')
+        .select('*');
+    if (error) throw error;
+    return data ?? [];
 }
 
 export async function addSLA(sla: Omit<SLAConfig, 'id'>): Promise<SLAConfig> {
-    await delay();
     const id = sla.nome.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '');
-    const newSLA: SLAConfig = { ...sla, id, ativo: true };
-    slas.push(newSLA);
-    return newSLA;
+    const { data, error } = await supabase
+        .from('sla_configs')
+        .insert({ ...sla, id, ativo: true })
+        .select()
+        .single();
+    if (error) throw error;
+    return data;
 }
 
-export async function updateSLA(id: string, data: Partial<SLAConfig>): Promise<SLAConfig> {
-    await delay();
-    const index = slas.findIndex(s => s.id === id);
-    if (index === -1) throw new Error('SLA não encontrado');
-    slas[index] = { ...slas[index], ...data };
-    return slas[index];
+export async function updateSLA(id: string, updates: Partial<SLAConfig>): Promise<SLAConfig> {
+    const { data, error } = await supabase
+        .from('sla_configs')
+        .update(updates)
+        .eq('id', id)
+        .select()
+        .single();
+    if (error) throw error;
+    return data;
 }
 
 export async function deleteSLA(id: string): Promise<void> {
-    await delay();
-    const index = slas.findIndex(s => s.id === id);
-    if (index === -1) throw new Error('SLA não encontrado');
-    slas[index].ativo = false;
+    const { error } = await supabase
+        .from('sla_configs')
+        .update({ ativo: false })
+        .eq('id', id);
+    if (error) throw error;
 }

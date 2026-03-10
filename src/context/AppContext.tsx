@@ -6,6 +6,7 @@ import * as userService from '../services/userService';
 import * as categoryService from '../services/categoryService';
 import * as statusService from '../services/statusService';
 import * as slaService from '../services/slaService';
+import * as authService from '../services/authService';
 
 interface AppState {
     chamados: Chamado[];
@@ -23,7 +24,7 @@ interface AppState {
 interface AppContextType extends AppState {
     switchUser: (userId: string) => void;
     login: (email: string, password: string) => Promise<boolean>;
-    logout: () => void;
+    logout: () => void | Promise<void>;
     assumirChamado: (chamadoId: string) => Promise<void>;
     atualizarStatus: (chamadoId: string, status: StatusChamado) => Promise<void>;
     encerrarChamado: (chamadoId: string, solucao: string) => Promise<void>;
@@ -81,32 +82,93 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         loading: true,
     });
 
+    // Carrega todos os dados do Supabase
     const loadData = useCallback(async () => {
-        setState(prev => ({ ...prev, loading: true }));
-        const [chamados, usuarios, clientes, categorias, statuses, slas, contatos] = await Promise.all([
-            ticketService.getTickets(),
-            userService.getUsers(),
-            clientService.getClients(),
-            categoryService.getCategorias(),
-            statusService.getStatuses(),
-            slaService.getSLAs(),
-            clientService.getAllContatos(),
-        ]);
-        setState(prev => ({
-            ...prev,
-            chamados,
-            usuarios,
-            clientes,
-            contatosClientes: contatos,
-            categoriasChamado: categorias,
-            statusConfigs: statuses,
-            slaConfigs: slas,
-            loading: false,
-        }));
+        try {
+            const pChamados = ticketService.getTickets();
+            const pUsuarios = userService.getUsers();
+            const pClientes = clientService.getClients();
+            const pCategorias = categoryService.getCategorias();
+            const pStatuses = statusService.getStatuses();
+            const pSlas = slaService.getSLAs();
+            const pContatos = clientService.getAllContatos();
+
+            const [chamados, usuarios, clientes, categorias, statuses, slas, contatos] = await Promise.all([
+                pChamados, pUsuarios, pClientes, pCategorias, pStatuses, pSlas, pContatos
+            ]);
+            setState(prev => ({
+                ...prev,
+                chamados,
+                usuarios,
+                clientes,
+                contatosClientes: contatos,
+                categoriasChamado: categorias,
+                statusConfigs: statuses,
+                slaConfigs: slas,
+                loading: false,
+            }));
+        } catch (err) {
+            console.error('Erro ao carregar dados:', err);
+            setState(prev => ({ ...prev, loading: false }));
+        }
     }, []);
 
+    // Listener de autenticação do Supabase
     useEffect(() => {
-        loadData();
+        let isMounted = true;
+
+        // Verificar sessão existente ao montar
+        const initAuth = async () => {
+            try {
+                const session = await authService.getCurrentSession();
+                if (session?.user && isMounted) {
+                    const usuario = await userService.getUserByAuthId(session.user.id);
+                    if (usuario) {
+                        setState(prev => ({
+                            ...prev,
+                            currentUser: usuario,
+                            isAuthenticated: true,
+                        }));
+                    }
+                }
+            } catch (err) {
+                console.error('Erro ao verificar sessão:', err);
+            }
+            if (isMounted) {
+                // Carrega dados após verificar auth
+                loadData();
+            }
+        };
+
+        initAuth();
+
+        // Escutar mudanças no estado de autenticação
+        const subscription = authService.onAuthStateChange(async (event, session) => {
+            if (!isMounted) return;
+
+            if (event === 'SIGNED_OUT') {
+                setState(prev => ({
+                    ...prev,
+                    currentUser: null,
+                    isAuthenticated: false,
+                }));
+            } else if (event === 'SIGNED_IN' && session?.user) {
+                const usuario = await userService.getUserByAuthId(session.user.id);
+                if (usuario && isMounted) {
+                    setState(prev => ({
+                        ...prev,
+                        currentUser: usuario,
+                        isAuthenticated: true,
+                    }));
+                    loadData();
+                }
+            }
+        });
+
+        return () => {
+            isMounted = false;
+            subscription.unsubscribe();
+        };
     }, [loadData]);
 
     const switchUser = useCallback((userId: string) => {
@@ -116,16 +178,31 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         }
     }, [state.usuarios]);
 
-    const login = useCallback(async (email: string, _password: string) => {
-        const user = state.usuarios.find(u => u.email === email);
-        if (user) {
-            setState(prev => ({ ...prev, currentUser: user, isAuthenticated: true }));
-            return true;
+    const login = useCallback(async (email: string, password: string) => {
+        try {
+            const { user } = await authService.signIn(email, password);
+            if (user) {
+                const usuario = await userService.getUserByAuthId(user.id);
+                if (usuario) {
+                    setState(prev => ({ ...prev, currentUser: usuario, isAuthenticated: true }));
+                    // Recarregar dados após login
+                    loadData();
+                    return true;
+                }
+            }
+            return false;
+        } catch (err) {
+            console.error('Erro no login:', err);
+            return false;
         }
-        return false;
-    }, [state.usuarios]);
+    }, [loadData]);
 
-    const logout = useCallback(() => {
+    const logout = useCallback(async () => {
+        try {
+            await authService.signOut();
+        } catch (err) {
+            console.error('Erro no logout:', err);
+        }
         setState(prev => ({ ...prev, currentUser: null, isAuthenticated: false }));
     }, []);
 
