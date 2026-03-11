@@ -81,3 +81,11 @@ export async function deleteUsuario(id: string): Promise<void> {
         .eq('id', id);
     if (error) throw error;
 }
+
+export async function deleteUsuarioFisico(id: string): Promise<void> {
+    const { error } = await supabase
+        .from('usuarios')
+        .delete()
+        .eq('id', id);
+    if (error) throw error;
+}

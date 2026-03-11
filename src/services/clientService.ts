@@ -88,6 +88,14 @@ export async function deleteCliente(id: string): Promise<void> {
     if (error) throw error;
 }
 
+export async function deleteClienteFisico(id: string): Promise<void> {
+    const { error } = await supabase
+        .from('clientes')
+        .delete()
+        .eq('id', id);
+    if (error) throw error;
+}
+
 // ===== CONTATOS =====
 export async function getAllContatos(): Promise<ContatoCliente[]> {
     const { data, error } = await supabase
@@ -141,6 +149,14 @@ export async function deleteContato(id: string): Promise<void> {
     const { error } = await supabase
         .from('contatos_clientes')
         .update({ ativo: false })
+        .eq('id', id);
+    if (error) throw error;
+}
+
+export async function deleteContatoFisico(id: string): Promise<void> {
+    const { error } = await supabase
+        .from('contatos_clientes')
+        .delete()
         .eq('id', id);
     if (error) throw error;
 }

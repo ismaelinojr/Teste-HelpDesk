@@ -14,6 +14,7 @@ interface AppState {
     clientes: Cliente[];
     contatosClientes: ContatoCliente[];
     categoriasChamado: CategoriaChamado[];
+    interacoes: Interacao[];
     statusConfigs: StatusConfig[];
     slaConfigs: SLAConfig[];
     currentUser: Usuario | null;
@@ -22,6 +23,7 @@ interface AppState {
 }
 
 interface AppContextType extends AppState {
+    interacoes: Interacao[];
     switchUser: (userId: string) => void;
     login: (email: string, password: string) => Promise<boolean>;
     logout: () => void | Promise<void>;
@@ -44,18 +46,22 @@ interface AppContextType extends AppState {
     addContato: (clienteId: string, nome: string, telefone?: string, email?: string, funcao?: string) => Promise<ContatoCliente>;
     updateContato: (id: string, data: Partial<ContatoCliente>) => Promise<ContatoCliente>;
     deleteContato: (id: string) => Promise<void>;
+    deleteContatoFisico: (id: string) => Promise<void>;
 
     addCliente: (cliente: Omit<Cliente, 'id'>) => Promise<Cliente>;
     updateCliente: (id: string, data: Partial<Cliente>) => Promise<Cliente>;
     deleteCliente: (id: string) => Promise<void>;
+    deleteClienteFisico: (id: string) => Promise<void>;
 
     addUsuario: (usuario: Omit<Usuario, 'id'>) => Promise<Usuario>;
     updateUsuario: (id: string, data: Partial<Usuario>) => Promise<Usuario>;
     deleteUsuario: (id: string) => Promise<void>;
+    deleteUsuarioFisico: (id: string) => Promise<void>;
 
     addCategoria: (categoria: Omit<CategoriaChamado, 'id'>) => Promise<CategoriaChamado>;
     updateCategoria: (id: string, data: Partial<CategoriaChamado>) => Promise<CategoriaChamado>;
     deleteCategoria: (id: string) => Promise<void>;
+    deleteCategoriaFisico: (id: string) => Promise<void>;
 
     addStatus: (status: Omit<StatusConfig, 'id'>) => Promise<StatusConfig>;
     updateStatus: (id: string, data: Partial<StatusConfig>) => Promise<StatusConfig>;
@@ -75,6 +81,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         clientes: [],
         contatosClientes: [],
         categoriasChamado: [],
+        interacoes: [],
         statusConfigs: [],
         slaConfigs: [],
         currentUser: null,
@@ -92,9 +99,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             const pStatuses = statusService.getStatuses();
             const pSlas = slaService.getSLAs();
             const pContatos = clientService.getAllContatos();
+            const pInteracoes = ticketService.getAllInteracoes();
 
-            const [chamados, usuarios, clientes, categorias, statuses, slas, contatos] = await Promise.all([
-                pChamados, pUsuarios, pClientes, pCategorias, pStatuses, pSlas, pContatos
+            const [chamados, usuarios, clientes, categorias, statuses, slas, contatos, allInteracoes] = await Promise.all([
+                pChamados, pUsuarios, pClientes, pCategorias, pStatuses, pSlas, pContatos, pInteracoes
             ]);
             setState(prev => ({
                 ...prev,
@@ -103,6 +111,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
                 clientes,
                 contatosClientes: contatos,
                 categoriasChamado: categorias,
+                interacoes: allInteracoes,
                 statusConfigs: statuses,
                 slaConfigs: slas,
                 loading: false,
@@ -314,6 +323,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         await clientService.deleteContato(id);
         setState(prev => ({
             ...prev,
+            contatosClientes: prev.contatosClientes.map(c => c.id === id ? { ...c, ativo: false } : c)
+        }));
+    }, []);
+
+    const deleteContatoFisico = useCallback(async (id: string) => {
+        await clientService.deleteContatoFisico(id);
+        setState(prev => ({
+            ...prev,
             contatosClientes: prev.contatosClientes.filter(c => c.id !== id)
         }));
     }, []);
@@ -335,6 +352,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
     const deleteCliente = useCallback(async (id: string) => {
         await clientService.deleteCliente(id);
+        setState(prev => ({
+            ...prev,
+            clientes: prev.clientes.map(c => c.id === id ? { ...c, ativo: false } : c)
+        }));
+    }, []);
+
+    const deleteClienteFisico = useCallback(async (id: string) => {
+        await clientService.deleteClienteFisico(id);
         setState(prev => ({
             ...prev,
             clientes: prev.clientes.filter(c => c.id !== id)
@@ -360,6 +385,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         await userService.deleteUsuario(id);
         setState(prev => ({
             ...prev,
+            usuarios: prev.usuarios.map(u => u.id === id ? { ...u, ativo: false } : u)
+        }));
+    }, []);
+
+    const deleteUsuarioFisico = useCallback(async (id: string) => {
+        await userService.deleteUsuarioFisico(id);
+        setState(prev => ({
+            ...prev,
             usuarios: prev.usuarios.filter(u => u.id !== id)
         }));
     }, []);
@@ -381,6 +414,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
     const deleteCategoria = useCallback(async (id: string) => {
         await categoryService.deleteCategoria(id);
+        setState(prev => ({
+            ...prev,
+            categoriasChamado: prev.categoriasChamado.map(c => c.id === id ? { ...c, ativo: false } : c)
+        }));
+    }, []);
+
+    const deleteCategoriaFisico = useCallback(async (id: string) => {
+        await categoryService.deleteCategoriaFisico(id);
         setState(prev => ({
             ...prev,
             categoriasChamado: prev.categoriasChamado.filter(c => c.id !== id)
@@ -460,15 +501,19 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             addContato,
             updateContato,
             deleteContato,
+            deleteContatoFisico,
             addCliente,
             updateCliente,
             deleteCliente,
+            deleteClienteFisico,
             addUsuario,
             updateUsuario,
             deleteUsuario,
+            deleteUsuarioFisico,
             addCategoria,
             updateCategoria,
             deleteCategoria,
+            deleteCategoriaFisico,
             addStatus,
             updateStatus,
             deleteStatus,

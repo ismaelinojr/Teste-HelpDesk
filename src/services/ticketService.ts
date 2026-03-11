@@ -138,6 +138,15 @@ export async function getInteracoes(chamadoId: string): Promise<Interacao[]> {
     return (data ?? []).map(mapInteracao);
 }
 
+export async function getAllInteracoes(): Promise<Interacao[]> {
+    const { data, error } = await supabase
+        .from('interacoes')
+        .select('*')
+        .order('created_at', { ascending: true });
+    if (error) throw error;
+    return (data ?? []).map(mapInteracao);
+}
+
 export async function addInteracao(chamadoId: string, usuarioId: string, mensagem: string): Promise<Interacao> {
     const { data, error } = await supabase
         .from('interacoes')

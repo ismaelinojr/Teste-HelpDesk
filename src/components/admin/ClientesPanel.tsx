@@ -1,11 +1,11 @@
 import React, { useState } from 'react';
 import { useApp } from '../../context/AppContext';
-import { Building2, Search, Plus, Edit2, Trash2, Power } from 'lucide-react';
+import { Building2, Search, Plus, Edit2, Trash2 } from 'lucide-react';
 import ModalForm from './ModalForm';
 import type { Cliente } from '../../types';
 
 export default function ClientesPanel() {
-    const { clientes, addCliente, updateCliente, deleteCliente } = useApp();
+    const { clientes, addCliente, updateCliente, deleteClienteFisico, chamados, contatosClientes } = useApp();
     const [search, setSearch] = useState('');
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingCliente, setEditingCliente] = useState<Cliente | null>(null);
@@ -54,12 +54,31 @@ export default function ClientesPanel() {
         }
     };
 
-    const handleToggleActive = async (cliente: Cliente) => {
-        if (confirm(`Deseja realmente ${cliente.ativo === false ? 'habilitar' : 'desabilitar'} o cliente ${cliente.nome}?`)) {
+    const handleToggleActive = async (cliente: Cliente, isChecked: boolean) => {
+        if (confirm(`Deseja realmente ${isChecked ? 'habilitar' : 'desabilitar'} o laboratório ${cliente.nome}?`)) {
+            await updateCliente(cliente.id, { ativo: isChecked });
+        }
+    };
+
+    const handleDelete = async (cliente: Cliente) => {
+        const hasChamados = chamados.some(c => c.clienteId === cliente.id);
+        const hasColaboradores = contatosClientes.some(c => c.clienteId === cliente.id);
+
+        if (hasChamados) {
             if (cliente.ativo === false) {
-                await updateCliente(cliente.id, { ativo: true });
-            } else {
-                await deleteCliente(cliente.id);
+                alert('Este laboratório já está desativado. Ele possui chamados vinculados e não pode ser excluído fisicamente para preservar o histórico.');
+                return;
+            }
+
+            if (confirm(`Aviso: O laboratório "${cliente.nome}" não pode ser excluído permanentemente porque possui chamados vinculados.\n\nDeseja desativá-lo para preservar o histórico?`)) {
+                await updateCliente(cliente.id, { ativo: false });
+                alert('Laboratório desativado com sucesso.');
+            }
+        } else if (hasColaboradores) {
+            alert('Aviso: Não é possível excluir o laboratório. Remova os colaboradores vinculados primeiro.');
+        } else {
+            if (confirm(`Deseja realmente excluir permanentemente o laboratório "${cliente.nome}"? Esta ação não pode ser desfeita.`)) {
+                await deleteClienteFisico(cliente.id);
             }
         }
     };
@@ -107,11 +126,20 @@ export default function ClientesPanel() {
                             </p>
                         </div>
                         <div className="card-actions" style={{ display: 'flex', gap: 8 }}>
+                            <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', fontSize: 13, color: 'var(--text-secondary)' }}>
+                                <input 
+                                    type="checkbox" 
+                                    checked={cliente.ativo !== false} 
+                                    onChange={(e) => handleToggleActive(cliente, e.target.checked)} 
+                                    style={{ accentColor: 'var(--accent)', width: 16, height: 16, cursor: 'pointer' }}
+                                />
+                                Ativo
+                            </label>
                             <button className="btn-icon" onClick={() => handleOpenEdit(cliente)} title="Editar" style={{ background: 'var(--bg-hover)', border: 'none', padding: 8, borderRadius: 6, cursor: 'pointer', color: 'var(--text-primary)' }}>
                                 <Edit2 size={16} />
                             </button>
-                            <button className="btn-icon" onClick={() => handleToggleActive(cliente)} title={cliente.ativo === false ? 'Habilitar' : 'Desabilitar'} style={{ background: 'var(--bg-hover)', border: 'none', padding: 8, borderRadius: 6, cursor: 'pointer', color: cliente.ativo === false ? 'var(--success)' : 'var(--danger)' }}>
-                                {cliente.ativo === false ? <Power size={16} /> : <Trash2 size={16} />}
+                            <button className="btn-icon" onClick={() => handleDelete(cliente)} title="Excluir Laboratório" style={{ background: 'var(--bg-hover)', border: 'none', padding: 8, borderRadius: 6, cursor: 'pointer', color: 'var(--danger)' }}>
+                                <Trash2 size={16} />
                             </button>
                         </div>
                     </div>

@@ -5,7 +5,7 @@ import ModalForm from './ModalForm';
 import type { ContatoCliente } from '../../types';
 
 export default function ColaboradoresPanel() {
-    const { clientes, addContato, updateContato, deleteContato, contatosClientes } = useApp();
+    const { clientes, addContato, updateContato, deleteContatoFisico, contatosClientes, chamados } = useApp();
     const [search, setSearch] = useState('');
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingContato, setEditingContato] = useState<ContatoCliente | null>(null);
@@ -68,9 +68,30 @@ export default function ColaboradoresPanel() {
         setIsModalOpen(false);
     };
 
+    const handleToggleActive = async (contato: ContatoCliente, isChecked: boolean) => {
+        if (confirm(`Deseja realmente ${isChecked ? 'habilitar' : 'desabilitar'} o colaborador ${contato.nome}?`)) {
+            await updateContato(contato.id, { ativo: isChecked });
+        }
+    };
+
     const handleDelete = async (contato: ContatoCliente) => {
-        if (confirm(`Deseja realmente excluir o colaborador ${contato.nome}? Esta ação pode deixar registros antigos órfãos no histórico de chamados.`)) {
-            await deleteContato(contato.id);
+        // Verifica se existe chamado aberto com o nome desse colaborador
+        const hasChamados = chamados.some(c => c.contatoNome === contato.nome && c.clienteId === contato.clienteId);
+
+        if (hasChamados) {
+            if (contato.ativo === false) {
+                alert('Este colaborador já está desativado. Ele possui histórico no sistema e não pode ser excluído fisicamente.');
+                return;
+            }
+
+            if (confirm(`Aviso: O colaborador "${contato.nome}" possui chamados no histórico e não pode ser excluído permanentemente.\n\nDeseja desativá-lo para preservar o histórico?`)) {
+                await updateContato(contato.id, { ativo: false });
+                alert('Colaborador desativado com sucesso.');
+            }
+        } else {
+             if (confirm(`Deseja realmente excluir permanentemente o colaborador "${contato.nome}"? Esta ação não pode ser desfeita.`)) {
+                await deleteContatoFisico(contato.id);
+            }
         }
     };
 
@@ -111,6 +132,7 @@ export default function ColaboradoresPanel() {
                             <h3 style={{ margin: '0 0 8px 0', display: 'flex', alignItems: 'center', gap: 6 }}>
                                 <Users size={16} color="var(--accent)" />
                                 {contato.nome}
+                                {contato.ativo === false && <span className="badge-inactive" style={{ fontSize: 10, padding: '2px 6px', background: 'var(--danger)', color: 'white', borderRadius: 4, marginLeft: 8 }}>Inativo</span>}
                             </h3>
                             <p style={{ margin: 0, color: 'var(--text-secondary)', fontSize: 13, display: 'flex', flexDirection: 'column', gap: 4 }}>
                                 <span><strong>Lab:</strong> {getLabName(contato.clienteId)}</span>
@@ -119,6 +141,15 @@ export default function ColaboradoresPanel() {
                             </p>
                         </div>
                         <div className="card-actions" style={{ display: 'flex', gap: 8 }}>
+                            <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', fontSize: 13, color: 'var(--text-secondary)' }}>
+                                <input 
+                                    type="checkbox" 
+                                    checked={contato.ativo !== false} 
+                                    onChange={(e) => handleToggleActive(contato, e.target.checked)} 
+                                    style={{ accentColor: 'var(--accent)', width: 16, height: 16, cursor: 'pointer' }}
+                                />
+                                Ativo
+                            </label>
                             <button className="btn-icon" onClick={() => handleOpenEdit(contato)} title="Editar" style={{ background: 'var(--bg-hover)', border: 'none', padding: 8, borderRadius: 6, cursor: 'pointer', color: 'var(--text-primary)' }}>
                                 <Edit2 size={16} />
                             </button>

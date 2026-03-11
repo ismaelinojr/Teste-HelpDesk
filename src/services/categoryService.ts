@@ -38,3 +38,11 @@ export async function deleteCategoria(id: string): Promise<void> {
         .eq('id', id);
     if (error) throw error;
 }
+
+export async function deleteCategoriaFisico(id: string): Promise<void> {
+    const { error } = await supabase
+        .from('categorias_chamado')
+        .delete()
+        .eq('id', id);
+    if (error) throw error;
+}

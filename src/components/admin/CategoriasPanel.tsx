@@ -1,11 +1,11 @@
 import React, { useState } from 'react';
 import { useApp } from '../../context/AppContext';
-import { Tags, Search, Plus, Edit2, Trash2, Power } from 'lucide-react';
+import { Tags, Search, Plus, Edit2, Trash2 } from 'lucide-react';
 import ModalForm from './ModalForm';
 import type { CategoriaChamado } from '../../types';
 
 export default function CategoriasPanel() {
-    const { categoriasChamado, addCategoria, updateCategoria, deleteCategoria } = useApp();
+    const { categoriasChamado, addCategoria, updateCategoria, deleteCategoriaFisico, chamados } = useApp();
     const [search, setSearch] = useState('');
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingCategoria, setEditingCategoria] = useState<CategoriaChamado | null>(null);
@@ -43,12 +43,28 @@ export default function CategoriasPanel() {
         setIsModalOpen(false);
     };
 
-    const handleToggleActive = async (categoria: CategoriaChamado) => {
-        if (confirm(`Deseja realmente ${categoria.ativo === false ? 'habilitar' : 'desabilitar'} a categoria ${categoria.nome}?`)) {
+    const handleToggleActive = async (categoria: CategoriaChamado, isChecked: boolean) => {
+        if (confirm(`Deseja realmente ${isChecked ? 'habilitar' : 'desabilitar'} a categoria ${categoria.nome}?`)) {
+            await updateCategoria(categoria.id, { ativo: isChecked });
+        }
+    };
+
+    const handleDelete = async (categoria: CategoriaChamado) => {
+        const hasChamados = chamados.some(c => c.categoriaId === categoria.id);
+
+        if (hasChamados) {
             if (categoria.ativo === false) {
-                await updateCategoria(categoria.id, { ativo: true });
-            } else {
-                await deleteCategoria(categoria.id);
+                alert('Esta categoria já está desativada. Ela possui chamados vinculados e não pode ser excluída fisicamente para preservar o histórico.');
+                return;
+            }
+
+            if (confirm(`Aviso: A categoria "${categoria.nome}" não pode ser excluída permanentemente porque possui chamados vinculados.\n\nDeseja desativá-la para preservar o histórico?`)) {
+                await updateCategoria(categoria.id, { ativo: false });
+                alert('Categoria desativada com sucesso.');
+            }
+        } else {
+            if (confirm(`Deseja realmente excluir permanentemente a categoria "${categoria.nome}"? Esta ação não pode ser desfeita.`)) {
+                await deleteCategoriaFisico(categoria.id);
             }
         }
     };
@@ -91,11 +107,20 @@ export default function CategoriasPanel() {
                             </p>
                         </div>
                         <div className="card-actions" style={{ display: 'flex', gap: 8 }}>
+                            <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', fontSize: 13, color: 'var(--text-secondary)' }}>
+                                <input 
+                                    type="checkbox" 
+                                    checked={categoria.ativo !== false} 
+                                    onChange={(e) => handleToggleActive(categoria, e.target.checked)} 
+                                    style={{ accentColor: 'var(--accent)', width: 16, height: 16, cursor: 'pointer' }}
+                                />
+                                Ativa
+                            </label>
                             <button className="btn-icon" onClick={() => handleOpenEdit(categoria)} title="Editar" style={{ background: 'var(--bg-hover)', border: 'none', padding: 8, borderRadius: 6, cursor: 'pointer', color: 'var(--text-primary)' }}>
                                 <Edit2 size={16} />
                             </button>
-                            <button className="btn-icon" onClick={() => handleToggleActive(categoria)} title={categoria.ativo === false ? 'Habilitar' : 'Desabilitar'} style={{ background: 'var(--bg-hover)', border: 'none', padding: 8, borderRadius: 6, cursor: 'pointer', color: categoria.ativo === false ? 'var(--success)' : 'var(--danger)' }}>
-                                {categoria.ativo === false ? <Power size={16} /> : <Trash2 size={16} />}
+                            <button className="btn-icon" onClick={() => handleDelete(categoria)} title="Excluir Categoria" style={{ background: 'var(--bg-hover)', border: 'none', padding: 8, borderRadius: 6, cursor: 'pointer', color: 'var(--danger)' }}>
+                                <Trash2 size={16} />
                             </button>
                         </div>
                     </div>

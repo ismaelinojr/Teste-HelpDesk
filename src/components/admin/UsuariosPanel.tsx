@@ -1,11 +1,11 @@
 import React, { useState } from 'react';
 import { useApp } from '../../context/AppContext';
-import { Users, Search, Plus, Edit2, Trash2, Power, Key } from 'lucide-react';
+import { Users, Search, Plus, Edit2, Trash2, Key } from 'lucide-react';
 import ModalForm from './ModalForm';
 import type { Usuario, Role } from '../../types';
 
 export default function UsuariosPanel() {
-    const { usuarios, addUsuario, updateUsuario, deleteUsuario } = useApp();
+    const { usuarios, addUsuario, updateUsuario, deleteUsuarioFisico, chamados, interacoes } = useApp();
     const [search, setSearch] = useState('');
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingUsuario, setEditingUsuario] = useState<Usuario | null>(null);
@@ -46,12 +46,39 @@ export default function UsuariosPanel() {
         setIsModalOpen(false);
     };
 
-    const handleToggleActive = async (usuario: Usuario) => {
-        if (confirm(`Deseja realmente ${usuario.ativo === false ? 'habilitar' : 'desabilitar'} o usuário ${usuario.nome}?`)) {
+    const handleToggleActive = async (usuario: Usuario, isChecked: boolean) => {
+        if (usuario.email === 'ismalinojr@gmail.com') {
+            alert('Ação bloqueada! O usuário admin principal não pode ser alterado ou excluído.');
+            return;
+        }
+
+        if (confirm(`Deseja realmente ${isChecked ? 'habilitar' : 'desabilitar'} o usuário ${usuario.nome}?`)) {
+            await updateUsuario(usuario.id, { ativo: isChecked });
+        }
+    };
+
+    const handleDelete = async (usuario: Usuario) => {
+        if (usuario.email === 'ismalinojr@gmail.com') {
+            alert('Ação bloqueada! O usuário admin principal não pode ser alterado ou excluído.');
+            return;
+        }
+
+        const hasChamados = chamados.some(c => c.tecnicoId === usuario.id);
+        const hasInteracoes = interacoes.some(i => i.usuarioId === usuario.id);
+
+        if (hasChamados || hasInteracoes) {
             if (usuario.ativo === false) {
-                await updateUsuario(usuario.id, { ativo: true });
-            } else {
-                await deleteUsuario(usuario.id);
+                alert('Este usuário já está desativado. Ele possui histórico no sistema e não pode ser excluído fisicamente.');
+                return;
+            }
+
+            if (confirm(`Aviso: O usuário "${usuario.nome}" possui interações/chamados no histórico e não pode ser excluído permanentemente.\n\nDeseja desativá-lo para preservar o histórico?`)) {
+                await updateUsuario(usuario.id, { ativo: false });
+                alert('Usuário desativado com sucesso.');
+            }
+        } else {
+            if (confirm(`Deseja realmente excluir permanentemente o usuário "${usuario.nome}"? Esta ação não pode ser desfeita.`)) {
+                await deleteUsuarioFisico(usuario.id);
             }
         }
     };
@@ -104,14 +131,23 @@ export default function UsuariosPanel() {
                             </span>
                         </div>
                         <div className="card-actions" style={{ display: 'flex', gap: 8 }}>
+                            <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', fontSize: 13, color: 'var(--text-secondary)' }}>
+                                <input 
+                                    type="checkbox" 
+                                    checked={usuario.ativo !== false} 
+                                    onChange={(e) => handleToggleActive(usuario, e.target.checked)} 
+                                    style={{ accentColor: 'var(--accent)', width: 16, height: 16, cursor: 'pointer' }}
+                                />
+                                Ativo
+                            </label>
                             <button className="btn-icon" onClick={() => handleResetPassword(usuario)} title="Redefinir Senha" style={{ background: 'var(--bg-hover)', border: 'none', padding: 8, borderRadius: 6, cursor: 'pointer', color: 'var(--warning, #f97316)' }}>
                                 <Key size={16} />
                             </button>
                             <button className="btn-icon" onClick={() => handleOpenEdit(usuario)} title="Editar" style={{ background: 'var(--bg-hover)', border: 'none', padding: 8, borderRadius: 6, cursor: 'pointer', color: 'var(--text-primary)' }}>
                                 <Edit2 size={16} />
                             </button>
-                            <button className="btn-icon" onClick={() => handleToggleActive(usuario)} title={usuario.ativo === false ? 'Habilitar' : 'Desabilitar'} style={{ background: 'var(--bg-hover)', border: 'none', padding: 8, borderRadius: 6, cursor: 'pointer', color: usuario.ativo === false ? 'var(--success)' : 'var(--danger)' }}>
-                                {usuario.ativo === false ? <Power size={16} /> : <Trash2 size={16} />}
+                            <button className="btn-icon" onClick={() => handleDelete(usuario)} title="Excluir Usuário" style={{ background: 'var(--bg-hover)', border: 'none', padding: 8, borderRadius: 6, cursor: 'pointer', color: 'var(--danger)' }}>
+                                <Trash2 size={16} />
                             </button>
                         </div>
                     </div>
