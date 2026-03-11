@@ -41,12 +41,17 @@ export default function ClientesPanel() {
 
     const handleSave = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (editingCliente) {
-            await updateCliente(editingCliente.id, { nome, contato, endereco, regiao });
-        } else {
-            await addCliente({ nome, contato, endereco, regiao });
+        try {
+            if (editingCliente) {
+                await updateCliente(editingCliente.id, { nome, contato, endereco, regiao });
+            } else {
+                await addCliente({ nome, contato, endereco, regiao });
+            }
+            setIsModalOpen(false);
+        } catch (error: any) {
+            console.error('Erro ao salvar cliente:', error);
+            alert('Não foi possível salvar os dados. Erro: ' + (error.message || 'Falha de comunicação ou Timeout no Supabase.'));
         }
-        setIsModalOpen(false);
     };
 
     const handleToggleActive = async (cliente: Cliente) => {
