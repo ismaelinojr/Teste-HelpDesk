@@ -62,6 +62,10 @@ export default function TicketDetail() {
 
     const handleEncerrar = async () => {
         if (!solucao.trim() || !id) return;
+        if (!chamado?.tecnicoId) {
+            alert('Não é possível encerrar o chamado: nenhum técnico atribuído. Por favor, assuma o chamado primeiro.');
+            return;
+        }
         await encerrarChamado(id, solucao.trim());
         setSolucao('');
         setShowModal(false);
@@ -128,7 +132,16 @@ export default function TicketDetail() {
                                     <option key={s.id} value={s.id}>{s.nome}</option>
                                 ))}
                             </select>
-                            <button className="btn btn-success btn-sm" onClick={() => setShowModal(true)}>
+                            <button
+                                className="btn btn-success btn-sm"
+                                onClick={() => {
+                                    if (!chamado?.tecnicoId) {
+                                        alert('Não é possível encerrar o chamado: não há nenhum técnico atribuído. Por favor, assuma o chamado primeiro.');
+                                        return;
+                                    }
+                                    setShowModal(true);
+                                }}
+                            >
                                 <CheckCircle2 size={14} /> Encerrar
                             </button>
                         </>
