@@ -19,6 +19,14 @@ export async function resetPassword(email: string) {
     if (error) throw error;
 }
 
+export async function inviteUser(email: string, nome: string, role: string) {
+    const { data, error } = await supabase.functions.invoke('invite-user', {
+        body: { email, nome, role }
+    });
+    if (error) throw error;
+    return data;
+}
+
 export async function getCurrentSession(): Promise<Session | null> {
     console.log('[AuthService] Chamando getSession()...');
     

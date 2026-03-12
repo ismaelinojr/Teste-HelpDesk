@@ -54,6 +54,7 @@ interface AppContextType extends AppState {
     deleteClienteFisico: (id: string) => Promise<void>;
 
     addUsuario: (usuario: Omit<Usuario, 'id'>) => Promise<Usuario>;
+    resendInvitation: (usuario: Usuario) => Promise<void>;
     updateUsuario: (id: string, data: Partial<Usuario>) => Promise<Usuario>;
     deleteUsuario: (id: string) => Promise<void>;
     deleteUsuarioFisico: (id: string) => Promise<void>;
@@ -367,9 +368,31 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }, []);
 
     const addUsuario = useCallback(async (usuario: Omit<Usuario, 'id'>) => {
-        const novo = await userService.addUsuario(usuario);
+        // 1. Enviar convite via Edge Function
+        const inviteResult = await authService.inviteUser(usuario.email, usuario.nome, usuario.role);
+        
+        // 2. Com o auth_id retornado, salvar no banco de dados
+        const novo = await userService.addUsuario({
+            ...usuario,
+            auth_id: inviteResult.authId
+        } as any);
+
         setState(prev => ({ ...prev, usuarios: [...prev.usuarios, novo] }));
         return novo;
+    }, []);
+
+    const resendInvitation = useCallback(async (usuario: Usuario) => {
+        // Enviar convite via Edge Function
+        const inviteResult = await authService.inviteUser(usuario.email, usuario.nome, usuario.role);
+        
+        // Se o usuário não tinha auth_id ou se o auth_id mudou (raro), atualizar no banco
+        if (inviteResult.authId && usuario.auth_id !== inviteResult.authId) {
+            await userService.updateUsuario(usuario.id, { auth_id: inviteResult.authId } as any);
+            setState(prev => ({
+                ...prev,
+                usuarios: prev.usuarios.map(u => u.id === usuario.id ? { ...u, auth_id: inviteResult.authId } : u)
+            }));
+        }
     }, []);
 
     const updateUsuario = useCallback(async (id: string, data: Partial<Usuario>) => {
@@ -507,6 +530,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             deleteCliente,
             deleteClienteFisico,
             addUsuario,
+            resendInvitation,
             updateUsuario,
             deleteUsuario,
             deleteUsuarioFisico,

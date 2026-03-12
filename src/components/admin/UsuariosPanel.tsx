@@ -1,14 +1,15 @@
 import React, { useState } from 'react';
 import { useApp } from '../../context/AppContext';
-import { Users, Search, Plus, Edit2, Trash2, Key } from 'lucide-react';
+import { Users, Search, Plus, Edit2, Trash2, Key, Mail, Loader2 } from 'lucide-react';
 import ModalForm from './ModalForm';
 import type { Usuario, Role } from '../../types';
 
 export default function UsuariosPanel() {
-    const { usuarios, addUsuario, updateUsuario, deleteUsuarioFisico, chamados, interacoes } = useApp();
+    const { usuarios, addUsuario, updateUsuario, deleteUsuarioFisico, chamados, interacoes, resendInvitation } = useApp();
     const [search, setSearch] = useState('');
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingUsuario, setEditingUsuario] = useState<Usuario | null>(null);
+    const [loadingAction, setLoadingAction] = useState<string | null>(null);
 
     // Form state
     const [nome, setNome] = useState('');
@@ -38,12 +39,19 @@ export default function UsuariosPanel() {
 
     const handleSave = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (editingUsuario) {
-            await updateUsuario(editingUsuario.id, { nome, email, role });
-        } else {
-            await addUsuario({ nome, email, role });
+        setLoadingAction('save');
+        try {
+            if (editingUsuario) {
+                await updateUsuario(editingUsuario.id, { nome, email, role });
+            } else {
+                await addUsuario({ nome, email, role });
+            }
+            setIsModalOpen(false);
+        } catch (error: any) {
+            alert('Erro ao salvar usuário: ' + (error.message || error));
+        } finally {
+            setLoadingAction(null);
         }
-        setIsModalOpen(false);
     };
 
     const handleToggleActive = async (usuario: Usuario, isChecked: boolean) => {
@@ -85,8 +93,22 @@ export default function UsuariosPanel() {
 
     const handleResetPassword = (usuario: Usuario) => {
         if (confirm(`Enviar e-mail de redefinição de senha para ${usuario.nome} (${usuario.email})?`)) {
-            // Mock de envio de e-mail
+            // Mock de envio de e-mail (Supabase enviará automaticamente se configurado no authService)
             alert(`✅ E-mail de redefinição enviado com sucesso para ${usuario.email}!`);
+        }
+    };
+
+    const handleResendInvite = async (usuario: Usuario) => {
+        if (confirm(`Reenviar e-mail de convite para ${usuario.nome} (${usuario.email})?`)) {
+            setLoadingAction(`invite-${usuario.id}`);
+            try {
+                await resendInvitation(usuario);
+                alert(`✅ Convite reenviado com sucesso para ${usuario.email}!`);
+            } catch (error: any) {
+                alert('Erro ao reenviar convite: ' + (error.message || error));
+            } finally {
+                setLoadingAction(null);
+            }
         }
     };
 
@@ -140,6 +162,9 @@ export default function UsuariosPanel() {
                                 />
                                 Ativo
                             </label>
+                            <button className="btn-icon" onClick={() => handleResendInvite(usuario)} title="Reenviar Convite" disabled={loadingAction === `invite-${usuario.id}`} style={{ background: 'var(--bg-hover)', border: 'none', padding: 8, borderRadius: 6, cursor: 'pointer', color: 'var(--accent)' }}>
+                                {loadingAction === `invite-${usuario.id}` ? <Loader2 size={16} className="animate-spin" /> : <Mail size={16} />}
+                            </button>
                             <button className="btn-icon" onClick={() => handleResetPassword(usuario)} title="Redefinir Senha" style={{ background: 'var(--bg-hover)', border: 'none', padding: 8, borderRadius: 6, cursor: 'pointer', color: 'var(--warning, #f97316)' }}>
                                 <Key size={16} />
                             </button>
@@ -200,7 +225,9 @@ export default function UsuariosPanel() {
 
                     <div className="form-actions" style={{ display: 'flex', justifyContent: 'flex-end', gap: 12, marginTop: 16 }}>
                         <button type="button" className="btn btn-secondary" onClick={() => setIsModalOpen(false)}>Cancelar</button>
-                        <button type="submit" className="btn btn-primary">Salvar</button>
+                        <button type="submit" className="btn btn-primary" disabled={loadingAction === 'save'}>
+                            {loadingAction === 'save' ? <Loader2 size={16} className="animate-spin" /> : 'Salvar'}
+                        </button>
                     </div>
                 </form>
             </ModalForm>

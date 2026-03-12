@@ -5,6 +5,7 @@ import type { Usuario } from '../types';
 function mapUsuario(row: Record<string, unknown>): Usuario {
     return {
         id: row.id as string,
+        auth_id: row.auth_id as string | undefined,
         nome: row.nome as string,
         role: row.role as 'admin' | 'tecnico',
         email: row.email as string,
@@ -15,8 +16,8 @@ function mapUsuario(row: Record<string, unknown>): Usuario {
 export async function getUsers(): Promise<Usuario[]> {
     const { data, error } = await supabase
         .from('usuarios')
-        .select('id, nome, role, email, ativo')
-        .eq('ativo', true);
+        .select('id, auth_id, nome, role, email, ativo');
+    // .eq('ativo', true); // Removido para ver inativos no painel admin se necessário, ou filtrar no frontend
     if (error) throw error;
     return (data ?? []).map(mapUsuario);
 }

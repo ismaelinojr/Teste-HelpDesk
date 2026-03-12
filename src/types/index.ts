@@ -25,6 +25,7 @@ export interface SLAConfig {
 
 export interface Usuario {
   id: string;
+  auth_id?: string;
   nome: string;
   role: Role;
   email: string;
