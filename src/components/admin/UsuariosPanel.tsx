@@ -3,15 +3,35 @@ import { useApp } from '../../context/AppContext';
 import { useNotification } from '../../context/NotificationContext';
 import { Users, Search, Plus, Edit2, Trash2, Key, Mail, Loader2 } from 'lucide-react';
 import ModalForm from './ModalForm';
+import ConfirmModal from './ConfirmModal';
 import type { Usuario, Role } from '../../types';
 
 export default function UsuariosPanel() {
-    const { usuarios, addUsuario, updateUsuario, deleteUsuarioFisico, chamados, interacoes, resendInvitation } = useApp();
+    const { 
+        usuarios, addUsuario, updateUsuario, deleteUsuarioFisico, 
+        chamados, interacoes, resendInvitation, resetPassword 
+    } = useApp();
     const { showNotification } = useNotification();
     const [search, setSearch] = useState('');
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingUsuario, setEditingUsuario] = useState<Usuario | null>(null);
     const [loadingAction, setLoadingAction] = useState<string | null>(null);
+
+    // Modal de confirmação
+    const [confirmModal, setConfirmModal] = useState<{
+        isOpen: boolean;
+        title: string;
+        message: string;
+        onConfirm: () => Promise<void> | void;
+        type: 'confirm' | 'danger' | 'warning' | 'info' | 'success';
+        confirmLabel?: string;
+    }>({
+        isOpen: false,
+        title: '',
+        message: '',
+        onConfirm: () => {},
+        type: 'confirm'
+    });
 
     // Form state
     const [nome, setNome] = useState('');
@@ -22,6 +42,23 @@ export default function UsuariosPanel() {
         u.nome.toLowerCase().includes(search.toLowerCase()) ||
         u.email.toLowerCase().includes(search.toLowerCase())
     );
+
+    const openConfirm = (
+        title: string, 
+        message: string, 
+        onConfirm: () => Promise<void> | void, 
+        type: 'confirm' | 'danger' | 'warning' | 'info' | 'success' = 'confirm',
+        confirmLabel?: string
+    ) => {
+        setConfirmModal({
+            isOpen: true,
+            title,
+            message,
+            onConfirm,
+            type,
+            confirmLabel
+        });
+    };
 
     const handleOpenNew = () => {
         setEditingUsuario(null);
@@ -60,23 +97,40 @@ export default function UsuariosPanel() {
 
     const handleToggleActive = async (usuario: Usuario, isChecked: boolean) => {
         if (usuario.email === 'ismalinojr@gmail.com') {
-            alert('Ação bloqueada! O usuário admin principal não pode ser alterado ou excluído.');
+            openConfirm(
+                'Ação Bloqueada', 
+                'O usuário administrador principal não pode ser alterado ou desabilitado.', 
+                () => {}, 
+                'warning', 
+                'Ok'
+            );
             return;
         }
 
-        if (confirm(`Deseja realmente ${isChecked ? 'habilitar' : 'desabilitar'} o usuário ${usuario.nome}?`)) {
-            try {
-                await updateUsuario(usuario.id, { ativo: isChecked });
-                showNotification(`Usuário ${isChecked ? 'habilitado' : 'desabilitado'} com sucesso!`, 'success');
-            } catch (error: any) {
-                showNotification('Erro ao alterar status do usuário.', 'error');
-            }
-        }
+        openConfirm(
+            `${isChecked ? 'Habilitar' : 'Desabilitar'} Usuário`,
+            `Deseja realmente ${isChecked ? 'habilitar' : 'desabilitar'} o acesso do usuário ${usuario.nome}?`,
+            async () => {
+                try {
+                    await updateUsuario(usuario.id, { ativo: isChecked });
+                    showNotification(`Usuário ${isChecked ? 'habilitado' : 'desabilitado'} com sucesso!`, 'success');
+                } catch (error: any) {
+                    showNotification('Erro ao alterar status do usuário.', 'error');
+                }
+            },
+            isChecked ? 'confirm' : 'warning'
+        );
     };
 
     const handleDelete = async (usuario: Usuario) => {
         if (usuario.email === 'ismalinojr@gmail.com') {
-            alert('Ação bloqueada! O usuário admin principal não pode ser alterado ou excluído.');
+            openConfirm(
+                'Ação Bloqueada', 
+                'O usuário administrador principal não pode ser excluído.', 
+                () => {}, 
+                'warning', 
+                'Ok'
+            );
             return;
         }
 
@@ -85,40 +139,80 @@ export default function UsuariosPanel() {
 
         if (hasChamados || hasInteracoes) {
             if (usuario.ativo === false) {
-                alert('Este usuário já está desativado. Ele possui histórico no sistema e não pode ser excluído fisicamente.');
+                openConfirm(
+                    'Usuário com Histórico',
+                    'Este usuário não pode ser excluído fisicamente pois possui chamados ou interações vinculadas ao seu nome.',
+                    () => {},
+                    'info',
+                    'Entendido'
+                );
                 return;
             }
 
-            if (confirm(`Aviso: O usuário "${usuario.nome}" possui interações/chamados no histórico e não pode ser excluído permanentemente.\n\nDeseja desativá-lo para preservar o histórico?`)) {
-                await updateUsuario(usuario.id, { ativo: false });
-                alert('Usuário desativado com sucesso.');
-            }
+            openConfirm(
+                'Desativar Usuário',
+                `Aviso: O usuário "${usuario.nome}" possui histórico no sistema e não pode ser removido permanentemente.\n\nDeseja desativar o acesso dele para preservar o histórico?`,
+                async () => {
+                    await updateUsuario(usuario.id, { ativo: false });
+                    showNotification('Usuário desativado com sucesso.', 'success');
+                },
+                'warning',
+                'Desativar Acesso'
+            );
         } else {
-            if (confirm(`Deseja realmente excluir permanentemente o usuário "${usuario.nome}"? Esta ação não pode ser desfeita.`)) {
-                await deleteUsuarioFisico(usuario.id);
-            }
+            openConfirm(
+                'Excluir Usuário',
+                `Deseja realmente excluir permanentemente o usuário "${usuario.nome}"? Esta ação não pode ser desfeita.`,
+                async () => {
+                    await deleteUsuarioFisico(usuario.id);
+                    showNotification('Usuário excluído permanentemente.', 'success');
+                },
+                'danger',
+                'Excluir Agora'
+            );
         }
     };
 
     const handleResetPassword = (usuario: Usuario) => {
-        if (confirm(`Enviar e-mail de redefinição de senha para ${usuario.nome} (${usuario.email})?`)) {
-            // Mock de envio de e-mail (Supabase enviará automaticamente se configurado no authService)
-            alert(`✅ E-mail de redefinição enviado com sucesso para ${usuario.email}!`);
-        }
+        openConfirm(
+            'Redefinir Senha',
+            `Deseja enviar um e-mail de redefinição de senha para ${usuario.nome} (${usuario.email})?`,
+            async () => {
+                setLoadingAction(`reset-${usuario.id}`);
+                try {
+                    await resetPassword(usuario.email);
+                    showNotification(`✅ E-mail de redefinição enviado com sucesso para ${usuario.email}!`, 'success');
+                } catch (error: any) {
+                    showNotification('Erro ao enviar e-mail: ' + (error.message || error), 'error');
+                } finally {
+                    setLoadingAction(null);
+                }
+            },
+            'confirm',
+            'Enviar E-mail'
+        );
     };
 
     const handleResendInvite = async (usuario: Usuario) => {
-        if (confirm(`Reenviar e-mail de convite para ${usuario.nome} (${usuario.email})?`)) {
-            setLoadingAction(`invite-${usuario.id}`);
-            try {
-                await resendInvitation(usuario);
-                showNotification(`✅ Convite reenviado com sucesso para ${usuario.email}!`, 'success');
-            } catch (error: any) {
-                showNotification('Erro ao reenviar convite: ' + (error.message || error), 'error');
-            } finally {
-                setLoadingAction(null);
+        openConfirm(
+            'Reenviar Convite',
+            `Deseja reenviar o e-mail de primeiro acesso para ${usuario.nome} (${usuario.email})?`,
+            async () => {
+                setLoadingAction(`invite-${usuario.id}`);
+                try {
+                    const result = await resendInvitation(usuario);
+                    if (result.alreadyExists) {
+                        showNotification(result.message, 'info');
+                    } else {
+                        showNotification(`✅ Convite reenviado com sucesso para ${usuario.email}!`, 'success');
+                    }
+                } catch (error: any) {
+                    showNotification('Erro ao reenviar convite: ' + (error.message || error), 'error');
+                } finally {
+                    setLoadingAction(null);
+                }
             }
-        }
+        );
     };
 
     return (
@@ -174,8 +268,8 @@ export default function UsuariosPanel() {
                             <button className="btn-icon" onClick={() => handleResendInvite(usuario)} title="Reenviar Convite" disabled={loadingAction === `invite-${usuario.id}`} style={{ background: 'var(--bg-hover)', border: 'none', padding: 8, borderRadius: 6, cursor: 'pointer', color: 'var(--accent)' }}>
                                 {loadingAction === `invite-${usuario.id}` ? <Loader2 size={16} className="animate-spin" /> : <Mail size={16} />}
                             </button>
-                            <button className="btn-icon" onClick={() => handleResetPassword(usuario)} title="Redefinir Senha" style={{ background: 'var(--bg-hover)', border: 'none', padding: 8, borderRadius: 6, cursor: 'pointer', color: 'var(--warning, #f97316)' }}>
-                                <Key size={16} />
+                            <button className="btn-icon" onClick={() => handleResetPassword(usuario)} title="Redefinir Senha" disabled={loadingAction === `reset-${usuario.id}`} style={{ background: 'var(--bg-hover)', border: 'none', padding: 8, borderRadius: 6, cursor: 'pointer', color: 'var(--warning, #f97316)' }}>
+                                {loadingAction === `reset-${usuario.id}` ? <Loader2 size={16} className="animate-spin" /> : <Key size={16} />}
                             </button>
                             <button className="btn-icon" onClick={() => handleOpenEdit(usuario)} title="Editar" style={{ background: 'var(--bg-hover)', border: 'none', padding: 8, borderRadius: 6, cursor: 'pointer', color: 'var(--text-primary)' }}>
                                 <Edit2 size={16} />
@@ -187,6 +281,16 @@ export default function UsuariosPanel() {
                     </div>
                 ))}
             </div>
+
+            <ConfirmModal
+                isOpen={confirmModal.isOpen}
+                onClose={() => setConfirmModal(prev => ({ ...prev, isOpen: false }))}
+                onConfirm={confirmModal.onConfirm}
+                title={confirmModal.title}
+                message={confirmModal.message}
+                type={confirmModal.type}
+                confirmLabel={confirmModal.confirmLabel}
+            />
 
             <ModalForm
                 isOpen={isModalOpen}

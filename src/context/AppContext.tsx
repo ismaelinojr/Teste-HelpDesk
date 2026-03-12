@@ -55,7 +55,8 @@ interface AppContextType extends AppState {
     deleteClienteFisico: (id: string) => Promise<void>;
 
     addUsuario: (usuario: Omit<Usuario, 'id'>) => Promise<Usuario>;
-    resendInvitation: (usuario: Usuario) => Promise<void>;
+    resendInvitation: (usuario: Usuario) => Promise<{ success: boolean; alreadyExists?: boolean; message: string }>;
+    resetPassword: (email: string) => Promise<void>;
     updateUsuario: (id: string, data: Partial<Usuario>) => Promise<Usuario>;
     deleteUsuario: (id: string) => Promise<void>;
     deleteUsuarioFisico: (id: string) => Promise<void>;
@@ -386,16 +387,21 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
     const resendInvitation = useCallback(async (usuario: Usuario) => {
         // Enviar convite via Edge Function
-        const inviteResult = await authService.inviteUser(usuario.email, usuario.nome, usuario.role);
+        const result = await authService.inviteUser(usuario.email, usuario.nome, usuario.role);
         
         // Se o usuário não tinha auth_id ou se o auth_id mudou (raro), atualizar no banco
-        if (inviteResult.authId && usuario.auth_id !== inviteResult.authId) {
-            await userService.updateUsuario(usuario.id, { auth_id: inviteResult.authId } as any);
+        if (result.authId && usuario.auth_id !== result.authId) {
+            await userService.updateUsuario(usuario.id, { auth_id: result.authId } as any);
             setState(prev => ({
                 ...prev,
-                usuarios: prev.usuarios.map(u => u.id === usuario.id ? { ...u, auth_id: inviteResult.authId } : u)
+                usuarios: prev.usuarios.map(u => u.id === usuario.id ? { ...u, auth_id: result.authId } : u)
             }));
         }
+        return result;
+    }, []);
+
+    const resetPassword = useCallback(async (email: string) => {
+        await authService.resetPassword(email);
     }, []);
 
     const updateUsuario = useCallback(async (id: string, data: Partial<Usuario>) => {
@@ -534,6 +540,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             deleteClienteFisico,
             addUsuario,
             resendInvitation,
+            resetPassword,
             updateUsuario,
             deleteUsuario,
             deleteUsuarioFisico,

@@ -13,6 +13,7 @@ export async function signOut() {
 }
 
 export async function resetPassword(email: string) {
+    // Envia e-mail real de recuperação via Supabase
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
         redirectTo: `${window.location.origin}/login`,
     });
