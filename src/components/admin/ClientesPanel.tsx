@@ -1,14 +1,17 @@
 import React, { useState } from 'react';
 import { useApp } from '../../context/AppContext';
-import { Building2, Search, Plus, Edit2, Trash2 } from 'lucide-react';
+import { useNotification } from '../../context/NotificationContext';
+import { Building2, Search, Plus, Edit2, Trash2, Loader2 } from 'lucide-react';
 import ModalForm from './ModalForm';
-import type { Cliente } from '../../types';
+import type { Cliente, Chamado, ContatoCliente } from '../../types';
 
 export default function ClientesPanel() {
     const { clientes, addCliente, updateCliente, deleteClienteFisico, chamados, contatosClientes } = useApp();
+    const { showNotification } = useNotification();
     const [search, setSearch] = useState('');
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingCliente, setEditingCliente] = useState<Cliente | null>(null);
+    const [isSaving, setIsSaving] = useState(false);
 
     // Form state
     const [nome, setNome] = useState('');
@@ -16,7 +19,7 @@ export default function ClientesPanel() {
     const [endereco, setEndereco] = useState('');
     const [regiao, setRegiao] = useState<'Norte' | 'Sul'>('Sul');
 
-    const filteredClientes = clientes.filter(c =>
+    const filteredClientes = clientes.filter((c: Cliente) =>
         c.nome.toLowerCase().includes(search.toLowerCase()) ||
         c.contato.includes(search)
     );
@@ -41,16 +44,23 @@ export default function ClientesPanel() {
 
     const handleSave = async (e: React.FormEvent) => {
         e.preventDefault();
+        if (isSaving) return;
+
+        setIsSaving(true);
         try {
             if (editingCliente) {
                 await updateCliente(editingCliente.id, { nome, contato, endereco, regiao });
+                showNotification('Laboratório atualizado com sucesso!', 'success');
             } else {
                 await addCliente({ nome, contato, endereco, regiao });
+                showNotification('Laboratório cadastrado com sucesso!', 'success');
             }
             setIsModalOpen(false);
         } catch (error: any) {
             console.error('Erro ao salvar cliente:', error);
-            alert('Não foi possível salvar os dados. Erro: ' + (error.message || 'Falha de comunicação ou Timeout no Supabase.'));
+            showNotification('Não foi possível salvar os dados. ' + (error.message || 'Falha de comunicação.'), 'error');
+        } finally {
+            setIsSaving(false);
         }
     };
 
@@ -61,24 +71,25 @@ export default function ClientesPanel() {
     };
 
     const handleDelete = async (cliente: Cliente) => {
-        const hasChamados = chamados.some(c => c.clienteId === cliente.id);
-        const hasColaboradores = contatosClientes.some(c => c.clienteId === cliente.id);
+        const hasChamados = chamados.some((c: Chamado) => c.clienteId === cliente.id);
+        const hasColaboradores = contatosClientes.some((c: ContatoCliente) => c.clienteId === cliente.id);
 
         if (hasChamados) {
             if (cliente.ativo === false) {
-                alert('Este laboratório já está desativado. Ele possui chamados vinculados e não pode ser excluído fisicamente para preservar o histórico.');
+                showNotification('Este laboratório já está desativado.', 'warning');
                 return;
             }
 
             if (confirm(`Aviso: O laboratório "${cliente.nome}" não pode ser excluído permanentemente porque possui chamados vinculados.\n\nDeseja desativá-lo para preservar o histórico?`)) {
                 await updateCliente(cliente.id, { ativo: false });
-                alert('Laboratório desativado com sucesso.');
+                showNotification('Laboratório desativado com sucesso.', 'success');
             }
         } else if (hasColaboradores) {
-            alert('Aviso: Não é possível excluir o laboratório. Remova os colaboradores vinculados primeiro.');
+            showNotification('Remova os colaboradores vinculados primeiro.', 'warning');
         } else {
             if (confirm(`Deseja realmente excluir permanentemente o laboratório "${cliente.nome}"? Esta ação não pode ser desfeita.`)) {
                 await deleteClienteFisico(cliente.id);
+                showNotification('Laboratório excluído com sucesso.', 'success');
             }
         }
     };
@@ -193,8 +204,17 @@ export default function ClientesPanel() {
                         </select>
                     </div>
                     <div className="form-actions" style={{ display: 'flex', justifyContent: 'flex-end', gap: 12, marginTop: 16 }}>
-                        <button type="button" className="btn btn-secondary" onClick={() => setIsModalOpen(false)}>Cancelar</button>
-                        <button type="submit" className="btn btn-primary">Salvar</button>
+                        <button type="button" className="btn btn-secondary" onClick={() => setIsModalOpen(false)} disabled={isSaving}>Cancelar</button>
+                        <button type="submit" className="btn btn-primary" disabled={isSaving}>
+                            {isSaving ? (
+                                <>
+                                    <Loader2 size={16} className="animate-spin" style={{ marginRight: 8 }} />
+                                    Salvando...
+                                </>
+                            ) : (
+                                'Salvar'
+                            )}
+                        </button>
                     </div>
                 </form>
             </ModalForm>

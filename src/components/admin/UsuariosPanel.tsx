@@ -1,11 +1,13 @@
 import React, { useState } from 'react';
 import { useApp } from '../../context/AppContext';
+import { useNotification } from '../../context/NotificationContext';
 import { Users, Search, Plus, Edit2, Trash2, Key, Mail, Loader2 } from 'lucide-react';
 import ModalForm from './ModalForm';
 import type { Usuario, Role } from '../../types';
 
 export default function UsuariosPanel() {
     const { usuarios, addUsuario, updateUsuario, deleteUsuarioFisico, chamados, interacoes, resendInvitation } = useApp();
+    const { showNotification } = useNotification();
     const [search, setSearch] = useState('');
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingUsuario, setEditingUsuario] = useState<Usuario | null>(null);
@@ -43,12 +45,14 @@ export default function UsuariosPanel() {
         try {
             if (editingUsuario) {
                 await updateUsuario(editingUsuario.id, { nome, email, role });
+                showNotification('Usuário atualizado com sucesso!', 'success');
             } else {
                 await addUsuario({ nome, email, role });
+                showNotification('Usuário cadastrado com sucesso!', 'success');
             }
             setIsModalOpen(false);
         } catch (error: any) {
-            alert('Erro ao salvar usuário: ' + (error.message || error));
+            showNotification('Erro ao salvar usuário: ' + (error.message || error), 'error');
         } finally {
             setLoadingAction(null);
         }
@@ -61,7 +65,12 @@ export default function UsuariosPanel() {
         }
 
         if (confirm(`Deseja realmente ${isChecked ? 'habilitar' : 'desabilitar'} o usuário ${usuario.nome}?`)) {
-            await updateUsuario(usuario.id, { ativo: isChecked });
+            try {
+                await updateUsuario(usuario.id, { ativo: isChecked });
+                showNotification(`Usuário ${isChecked ? 'habilitado' : 'desabilitado'} com sucesso!`, 'success');
+            } catch (error: any) {
+                showNotification('Erro ao alterar status do usuário.', 'error');
+            }
         }
     };
 
@@ -103,9 +112,9 @@ export default function UsuariosPanel() {
             setLoadingAction(`invite-${usuario.id}`);
             try {
                 await resendInvitation(usuario);
-                alert(`✅ Convite reenviado com sucesso para ${usuario.email}!`);
+                showNotification(`✅ Convite reenviado com sucesso para ${usuario.email}!`, 'success');
             } catch (error: any) {
-                alert('Erro ao reenviar convite: ' + (error.message || error));
+                showNotification('Erro ao reenviar convite: ' + (error.message || error), 'error');
             } finally {
                 setLoadingAction(null);
             }

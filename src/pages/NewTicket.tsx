@@ -1,11 +1,13 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
+import { useNotification } from '../context/NotificationContext';
 import type { Prioridade, ContatoCliente } from '../types';
-import { ArrowLeft, Save } from 'lucide-react';
+import { ArrowLeft, Save, Loader2 } from 'lucide-react';
 
 export default function NewTicket() {
     const { clientes, criarChamado, getContatosByCliente, addContato, categoriasChamado, slaConfigs } = useApp();
+    const { showNotification } = useNotification();
     const navigate = useNavigate();
 
     const [clienteId, setClienteId] = useState('');
@@ -52,8 +54,16 @@ export default function NewTicket() {
         if (!contatoNome) return; // Force providing a contact
 
         setSaving(true);
-        await criarChamado({ clienteId, contatoNome, categoriaId, titulo: titulo.trim(), descricao: descricao.trim(), prioridade });
-        navigate('/');
+        try {
+            await criarChamado({ clienteId, contatoNome, categoriaId, titulo: titulo.trim(), descricao: descricao.trim(), prioridade });
+            showNotification('Chamado aberto com sucesso!', 'success');
+            navigate('/');
+        } catch (error: any) {
+            console.error('Erro ao criar chamado:', error);
+            showNotification('Erro ao abrir chamado. Verifique sua conexão.', 'error');
+        } finally {
+            setSaving(false);
+        }
     };
 
     return (
@@ -180,8 +190,17 @@ export default function NewTicket() {
                             className="btn btn-primary"
                             disabled={saving || !clienteId || !categoriaId || !contatoId || (contatoId === 'outro' && !novoContatoNome.trim()) || !titulo.trim() || !descricao.trim()}
                         >
-                            <Save size={16} />
-                            {saving ? 'Salvando...' : 'Criar Chamado'}
+                            {saving ? (
+                                <>
+                                    <Loader2 size={16} className="animate-spin" style={{ marginRight: 8 }} />
+                                    Salvando...
+                                </>
+                            ) : (
+                                <>
+                                    <Save size={16} style={{ marginRight: 8 }} />
+                                    Criar Chamado
+                                </>
+                            )}
                         </button>
                     </div>
                 </form>

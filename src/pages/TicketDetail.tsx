@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
+import { useNotification } from '../context/NotificationContext';
 import { calcularSLA, formatarTempo, formatarData } from '../utils/sla';
 import type { Interacao, StatusChamado } from '../types';
 import {
@@ -27,6 +28,7 @@ export default function TicketDetail() {
         getSLALabel,
         statusConfigs,
     } = useApp();
+    const { showNotification } = useNotification();
 
     const [interacoes, setInteracoes] = useState<Interacao[]>([]);
     const [novaNota, setNovaNota] = useState('');
@@ -49,33 +51,53 @@ export default function TicketDetail() {
 
     const handleAddNota = async () => {
         if (!novaNota.trim() || !id) return;
-        await adicionarNota(id, novaNota.trim());
-        setNovaNota('');
-        await loadInteracoes();
+        try {
+            await adicionarNota(id, novaNota.trim());
+            setNovaNota('');
+            showNotification('Nota adicionada!', 'success');
+            await loadInteracoes();
+        } catch (error) {
+            showNotification('Erro ao adicionar nota.', 'error');
+        }
     };
 
     const handleStatusChange = async (newStatus: StatusChamado) => {
         if (!id) return;
-        await atualizarStatus(id, newStatus);
-        await loadInteracoes();
+        try {
+            await atualizarStatus(id, newStatus);
+            showNotification(`Status alterado para ${getStatusLabel(newStatus)}`, 'info');
+            await loadInteracoes();
+        } catch (error) {
+            showNotification('Erro ao alterar status.', 'error');
+        }
     };
 
     const handleEncerrar = async () => {
         if (!solucao.trim() || !id) return;
         if (!chamado?.tecnicoId) {
-            alert('Não é possível encerrar o chamado: nenhum técnico atribuído. Por favor, assuma o chamado primeiro.');
+            showNotification('Nenhum técnico atribuído ao chamado.', 'warning');
             return;
         }
-        await encerrarChamado(id, solucao.trim());
-        setSolucao('');
-        setShowModal(false);
-        await loadInteracoes();
+        try {
+            await encerrarChamado(id, solucao.trim());
+            setSolucao('');
+            setShowModal(false);
+            showNotification('Chamado encerrado com sucesso!', 'success');
+            await loadInteracoes();
+        } catch (error) {
+            showNotification('Erro ao encerrar chamado.', 'error');
+        }
     };
 
     const handleAssumir = async () => {
         if (!id) return;
-        await assumirChamado(id);
-        await loadInteracoes();
+        try {
+            await assumirChamado(id);
+            showNotification('Você assumiu este chamado.', 'success');
+            await loadInteracoes();
+        } catch (error) {
+            showNotification('Erro ao assumir chamado.', 'error');
+        }
     };
 
     if (!chamado) {

@@ -7,6 +7,7 @@ import * as categoryService from '../services/categoryService';
 import * as statusService from '../services/statusService';
 import * as slaService from '../services/slaService';
 import * as authService from '../services/authService';
+import { useNotification } from './NotificationContext';
 
 interface AppState {
     chamados: Chamado[];
@@ -76,6 +77,7 @@ interface AppContextType extends AppState {
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
 export function AppProvider({ children }: { children: React.ReactNode }) {
+    const { showNotification } = useNotification();
     const [state, setState] = useState<AppState>({
         chamados: [],
         usuarios: [],
@@ -117,11 +119,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
                 slaConfigs: slas,
                 loading: false,
             }));
-        } catch (err) {
+        } catch (err: any) {
             console.error('Erro ao carregar dados:', err);
+            showNotification('Falha ao carregar dados do sistema. Verifique sua conexão.', 'error');
             setState(prev => ({ ...prev, loading: false }));
         }
-    }, []);
+    }, [showNotification]);
 
     // Listener de autenticação do Supabase
     useEffect(() => {

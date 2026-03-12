@@ -1,5 +1,6 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AppProvider, useApp } from './context/AppContext';
+import { NotificationProvider } from './context/NotificationContext';
 import Layout from './components/Layout';
 import Dashboard from './pages/Dashboard';
 import TicketDetail from './pages/TicketDetail';
@@ -26,25 +27,27 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
 function App() {
   return (
     <BrowserRouter>
-      <AppProvider>
-        <Routes>
-          <Route path="/login" element={<Login />} />
-          <Route
-            path="/*"
-            element={
-              <ProtectedRoute>
-                <Layout />
-              </ProtectedRoute>
-            }
-          >
-            <Route index element={<Dashboard />} />
-            <Route path="chamado/:id" element={<TicketDetail />} />
-            <Route path="admin" element={<Admin />} />
-            <Route path="novo" element={<NewTicket />} />
-            <Route path="relatorios" element={<Relatorios />} />
-          </Route>
-        </Routes>
-      </AppProvider>
+      <NotificationProvider>
+        <AppProvider>
+          <Routes>
+            <Route path="/login" element={<Login />} />
+            <Route
+              path="/*"
+              element={
+                <ProtectedRoute>
+                  <Layout />
+                </ProtectedRoute>
+              }
+            >
+              <Route index element={<Dashboard />} />
+              <Route path="chamado/:id" element={<TicketDetail />} />
+              <Route path="admin" element={<Admin />} />
+              <Route path="novo" element={<NewTicket />} />
+              <Route path="relatorios" element={<Relatorios />} />
+            </Route>
+          </Routes>
+        </AppProvider>
+      </NotificationProvider>
     </BrowserRouter>
   );
 }
