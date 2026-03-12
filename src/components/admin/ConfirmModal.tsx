@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { X, AlertTriangle, AlertCircle, Info, CheckCircle, Loader2 } from 'lucide-react';
+import { AlertTriangle, AlertCircle, Info, CheckCircle, Loader2 } from 'lucide-react';
 
 interface ConfirmModalProps {
     isOpen: boolean;
