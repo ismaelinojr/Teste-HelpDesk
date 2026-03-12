@@ -13,9 +13,12 @@ export async function signOut() {
 }
 
 export async function resetPassword(email: string) {
+    // Tenta pegar a URL do site da variável de ambiente, ou usa o origin atual como fallback
+    const siteUrl = import.meta.env.VITE_SITE_URL || window.location.origin;
+    
     // Envia e-mail real de recuperação via Supabase
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: `${window.location.origin}/login`,
+        redirectTo: `${siteUrl}/login`,
     });
     if (error) throw error;
 }
