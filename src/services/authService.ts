@@ -1,5 +1,6 @@
 import { supabase } from '../lib/supabaseClient';
 import type { Session, User, AuthChangeEvent } from '@supabase/supabase-js';
+import { withTimeout } from '../utils/promiseUtils';
 
 export async function signIn(email: string, password: string) {
     const { data, error } = await supabase.auth.signInWithPassword({ email, password });
@@ -8,8 +9,13 @@ export async function signIn(email: string, password: string) {
 }
 
 export async function signOut() {
-    const { error } = await supabase.auth.signOut();
-    if (error) throw error;
+    try {
+        // Timeout curto para logout (5s), pois queremos que a UI libere rápido
+        await withTimeout(supabase.auth.signOut(), 5000, 'Erro ao deslogar no servidor. Limpando sessão local...');
+    } catch (error) {
+        console.warn('[AuthService] SignOut error (handled):', error);
+        // Não relançamos o erro para permitir que o AppContext continue a limpeza local
+    }
 }
 
 export async function resetPassword(email: string) {

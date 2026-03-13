@@ -8,6 +8,7 @@ import * as statusService from '../services/statusService';
 import * as slaService from '../services/slaService';
 import * as authService from '../services/authService';
 import { useNotification } from './NotificationContext';
+import { withTimeout } from '../utils/promiseUtils';
 
 interface AppState {
     chamados: Chamado[];
@@ -184,7 +185,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             subscription.unsubscribe();
         };
     }, [loadData]);
-
+    
     const switchUser = useCallback((userId: string) => {
         const user = state.usuarios.find(u => u.id === userId);
         if (user) {
@@ -212,12 +213,20 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }, [loadData]);
 
     const logout = useCallback(async () => {
+        // Limpeza local IMEDIATA para destravar a UI
+        setState(prev => ({ 
+            ...prev, 
+            currentUser: null, 
+            isAuthenticated: false,
+            loading: false // Garante que saia de estados de loading
+        }));
+        
         try {
             await authService.signOut();
         } catch (err) {
-            console.error('Erro no logout:', err);
+            console.error('Erro ao realizar logout no servidor:', err);
+            // Mesmo se falhar, o estado local já foi limpo
         }
-        setState(prev => ({ ...prev, currentUser: null, isAuthenticated: false }));
     }, []);
 
     const refreshChamados = useCallback(async () => {
@@ -341,19 +350,39 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }, []);
 
     const addCliente = useCallback(async (cliente: Omit<Cliente, 'id'>) => {
-        const novo = await clientService.addCliente(cliente);
-        setState(prev => ({ ...prev, clientes: [...prev.clientes, novo] }));
-        return novo;
-    }, []);
+        try {
+            const novo = await withTimeout(
+                clientService.addCliente(cliente),
+                15000,
+                'Tempo limite excedido ao cadastrar laboratório.'
+            );
+            setState(prev => ({ ...prev, clientes: [...prev.clientes, novo] }));
+            return novo;
+        } catch (error: any) {
+            console.error('Erro no addCliente:', error);
+            showNotification(error.message || 'Erro ao cadastrar laboratório.', 'error');
+            throw error;
+        }
+    }, [showNotification]);
 
     const updateCliente = useCallback(async (id: string, data: Partial<Cliente>) => {
-        const atualizado = await clientService.updateCliente(id, data);
-        setState(prev => ({
-            ...prev,
-            clientes: prev.clientes.map(c => c.id === id ? atualizado : c)
-        }));
-        return atualizado;
-    }, []);
+        try {
+            const atualizado = await withTimeout(
+                clientService.updateCliente(id, data),
+                15000,
+                'Tempo limite excedido ao atualizar laboratório. Verifique sua conexão.'
+            );
+            setState(prev => ({
+                ...prev,
+                clientes: prev.clientes.map(c => c.id === id ? atualizado : c)
+            }));
+            return atualizado;
+        } catch (error: any) {
+            console.error('Erro no updateCliente:', error);
+            showNotification(error.message || 'Erro ao atualizar laboratório.', 'error');
+            throw error;
+        }
+    }, [showNotification]);
 
     const deleteCliente = useCallback(async (id: string) => {
         await clientService.deleteCliente(id);
@@ -364,12 +393,22 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }, []);
 
     const deleteClienteFisico = useCallback(async (id: string) => {
-        await clientService.deleteClienteFisico(id);
-        setState(prev => ({
-            ...prev,
-            clientes: prev.clientes.filter(c => c.id !== id)
-        }));
-    }, []);
+        try {
+            await withTimeout(
+                clientService.deleteClienteFisico(id),
+                15000,
+                'Tempo limite excedido ao excluir laboratório.'
+            );
+            setState(prev => ({
+                ...prev,
+                clientes: prev.clientes.filter(c => c.id !== id)
+            }));
+        } catch (error: any) {
+            console.error('Erro no deleteClienteFisico:', error);
+            showNotification(error.message || 'Erro ao excluir laboratório.', 'error');
+            throw error;
+        }
+    }, [showNotification]);
 
     const addUsuario = useCallback(async (usuario: Omit<Usuario, 'id'>) => {
         // 1. Enviar convite via Edge Function
@@ -507,6 +546,38 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             slaConfigs: prev.slaConfigs.filter(s => s.id !== id)
         }));
     }, []);
+
+    // Auto-refresh: Recarregar dados automaticamente a cada 5 minutos (para monitoramento)
+    useEffect(() => {
+        const interval = setInterval(() => {
+            if (state.isAuthenticated && !state.loading) {
+                console.log('[AppContext] Auto-refresh de dados acionado...');
+                loadData();
+            }
+        }, 5 * 60 * 1000); // 5 minutos
+        
+        return () => clearInterval(interval);
+    }, [state.isAuthenticated, state.loading, loadData]);
+
+    // Verificação ao retomar foco: Garante que o sistema volte a vida ao trocar de aba/monitor
+    useEffect(() => {
+        const handleFocus = () => {
+            if (state.isAuthenticated) {
+                console.log('[AppContext] Aba focada, verificando sessão e dados...');
+                authService.getCurrentSession().then(session => {
+                    if (!session) {
+                        // Se a sessão expirou totalmente enquanto estava inativo
+                        logout();
+                    } else {
+                        loadData();
+                    }
+                });
+            }
+        };
+
+        window.addEventListener('focus', handleFocus);
+        return () => window.removeEventListener('focus', handleFocus);
+    }, [state.isAuthenticated, loadData, logout]);
 
     return (
         <AppContext.Provider value={{
