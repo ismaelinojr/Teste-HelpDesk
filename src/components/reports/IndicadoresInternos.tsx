@@ -91,10 +91,46 @@ export default function IndicadoresInternos() {
             count: chamadosFiltrados.filter(ch => ch.categoriaId === cat.id).length
         })).filter(cat => cat.count > 0).sort((a, b) => b.count - a.count);
 
-        const byTecnico = usuarios.filter(u => u.role === 'tecnico').map(tec => ({
-            nome: tec.nome,
-            count: chamadosFiltrados.filter(ch => ch.tecnicoId === tec.id && ch.status === 'fechado').length
-        })).sort((a, b) => b.count - a.count);
+        // Cálculo de dias no período
+        const totalDias = (() => {
+            const inicio = new Date(dataInicio);
+            const fim = new Date(dataFim);
+            const diffTime = Math.abs(fim.getTime() - inicio.getTime());
+            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1; // +1 para ser inclusivo
+            return diffDays || 1;
+        })();
+
+        const byTecnico = usuarios
+            .filter(u => u.role === 'tecnico' || u.role === 'admin')
+            .map(tec => {
+                const fechadosNoPeriodo = chamadosFiltrados.filter(ch => 
+                    ch.tecnicoId === tec.id && 
+                    ch.status === 'fechado' && 
+                    ch.dataFechamento
+                );
+
+                const count = fechadosNoPeriodo.length;
+
+                // Cálculo de tempo médio em minutos
+                const tempoTotalMinutos = fechadosNoPeriodo.reduce((acc, ch) => {
+                    if (!ch.dataFechamento) return acc;
+                    const abertura = new Date(ch.dataAbertura).getTime();
+                    const fechamento = new Date(ch.dataFechamento).getTime();
+                    return acc + ((fechamento - abertura) / (1000 * 60));
+                }, 0);
+
+                const mediaMinutos = count > 0 ? Math.round(tempoTotalMinutos / count) : 0;
+                const mediaChamadosDia = Number((count / totalDias).toFixed(1));
+
+                return {
+                    nome: tec.nome,
+                    count,
+                    mediaChamadosDia,
+                    mediaMinutos
+                };
+            })
+            .filter(tec => tec.count > 0)
+            .sort((a, b) => b.count - a.count);
 
         // Agrupa por colaborador que abriu o chamado (usando o contatoNome + ID do cliente para saber a região)
         // Usamos um identificador composto para evitar sobreposição de nomes de Labs diferentes
@@ -227,12 +263,13 @@ export default function IndicadoresInternos() {
             </div>
 
             {/* Primeira Linha: KPI Cards Gerais e Regionais */}
-            <div className="summary-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '20px', marginBottom: '30px' }}>
+            <div className="summary-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: '16px', marginBottom: '30px' }}>
                 <KPICard title="Total de Chamados" value={stats.total} icon={<TicketCheck size={24} color="var(--text-secondary)" />} />
                 <KPICard title="Total de Chamados - Sul" value={stats.totalSul} icon={<TicketCheck size={24} color="var(--danger)" />} />
                 <KPICard title="Total de Chamados - Norte" value={stats.totalNorte} icon={<TicketCheck size={24} color="var(--info)" />} />
                 <KPICard title="Desempenho SLA (No Prazo)" value={`${stats.fechados > 0 ? Math.round(((stats.fechados - stats.violados) / stats.fechados) * 100) : 100}%`} icon={<Clock size={24} color="var(--accent)" />} highlight />
                 <KPICard title="Chamados em Atraso" value={stats.violados} icon={<AlertTriangle size={24} color="var(--danger)" />} />
+                <KPICard title="Total de chamados fechados" value={stats.fechados} icon={<TicketCheck size={24} color="var(--success)" />} />
             </div>
 
             {/* Segunda Linha: Volume por Laboratório (Geral, Sul, Norte) */}
@@ -310,17 +347,73 @@ export default function IndicadoresInternos() {
                 </div>
 
                 <div className="admin-card" style={{ padding: 24, margin: 0 }}>
-                    <h3 style={{ marginTop: 0, marginBottom: 16, display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <h3 style={{ marginTop: 0, marginBottom: 20, display: 'flex', alignItems: 'center', gap: 8 }}>
                         <Users size={18} /> Resoluções por Técnico
                     </h3>
+                    
+                    {/* Cabeçalho da Tabela */}
+                    <div style={{ 
+                        display: 'grid', 
+                        gridTemplateColumns: '2fr 1fr 1.2fr 1.2fr', 
+                        padding: '12px 8px', 
+                        borderBottom: '2px solid var(--border)',
+                        color: 'var(--text-muted)',
+                        fontSize: '12px',
+                        fontWeight: 600,
+                        textTransform: 'uppercase',
+                        letterSpacing: '0.5px'
+                    }}>
+                        <span>Técnico</span>
+                        <span style={{ textAlign: 'center' }}>Total</span>
+                        <span style={{ textAlign: 'center' }}>Média/Dia</span>
+                        <span style={{ textAlign: 'right' }}>Tempo Médio</span>
+                    </div>
+
                     <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
                         {stats.byTecnico.map((t, i) => (
-                            <li key={i} style={{ display: 'flex', justifyContent: 'space-between', padding: '12px 0', borderBottom: i === stats.byTecnico.length - 1 ? 'none' : '1px solid var(--border)' }}>
-                                <span>{t.nome}</span>
-                                <span style={{ fontWeight: 'bold', color: 'var(--success)' }}>{t.count} fechados</span>
+                            <li key={i} style={{ 
+                                display: 'grid', 
+                                gridTemplateColumns: '2fr 1fr 1.2fr 1.2fr', 
+                                alignItems: 'center',
+                                padding: '16px 8px', 
+                                borderBottom: i === stats.byTecnico.length - 1 ? 'none' : '1px solid var(--border)',
+                                transition: 'background 0.2s ease'
+                            }}>
+                                <span style={{ fontWeight: 500, color: 'var(--text-primary)' }}>{t.nome}</span>
+                                
+                                <div style={{ textAlign: 'center' }}>
+                                    <span style={{ 
+                                        background: 'var(--success-bg)', 
+                                        color: 'var(--success)', 
+                                        padding: '4px 10px', 
+                                        borderRadius: '12px', 
+                                        fontSize: '13px', 
+                                        fontWeight: 600 
+                                    }}>
+                                        {t.count}
+                                    </span>
+                                </div>
+
+                                <span style={{ textAlign: 'center', color: 'var(--text-secondary)', fontSize: '14px' }}>
+                                    {t.mediaChamadosDia}
+                                </span>
+
+                                <div style={{ textAlign: 'right' }}>
+                                    <span style={{ 
+                                        color: t.mediaMinutos > 120 ? 'var(--warning)' : 'var(--text-primary)',
+                                        fontWeight: 500,
+                                        fontSize: '14px'
+                                    }}>
+                                        {t.mediaMinutos} min
+                                    </span>
+                                </div>
                             </li>
                         ))}
-                        {stats.byTecnico.length === 0 && <li style={{ padding: '12px 0', color: 'var(--text-muted)' }}>Nenhum chamado fechado no período</li>}
+                        {stats.byTecnico.length === 0 && (
+                            <li style={{ padding: '24px 0', textAlign: 'center', color: 'var(--text-muted)' }}>
+                                Nenhum chamado fechado no período
+                            </li>
+                        )}
                     </ul>
                 </div>
             </div>
