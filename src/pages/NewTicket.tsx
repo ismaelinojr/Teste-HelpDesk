@@ -22,6 +22,7 @@ export default function NewTicket() {
     const [clienteId, setClienteId] = useState('');
     const [novoClienteNome, setNovoClienteNome] = useState('');
     const [novoClienteContato, setNovoClienteContato] = useState('');
+    const [novoClienteRegiao, setNovoClienteRegiao] = useState<'Norte' | 'Sul' | ''>('');
     const [contatos, setContatos] = useState<ContatoCliente[]>([]);
     const [contatoId, setContatoId] = useState('');
 
@@ -54,20 +55,28 @@ export default function NewTicket() {
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!clienteId || !titulo.trim() || !descricao.trim() || !categoriaId) return;
-
-        // Handle contact name
-        let contatoNome = undefined;
-        if (contatoId === 'outro' && novoContatoNome.trim()) {
-            contatoNome = novoContatoNome.trim();
-            // Automatically add this new contact to the mock DB for future use with phone
-            await addContato(clienteId, contatoNome, novoContatoTelefone.trim() || undefined);
-        } else if (contatoId) {
-            const selectedContact = contatos.find(c => c.id === contatoId);
-            if (selectedContact) contatoNome = selectedContact.nome;
+        
+        // Validações básicas antes de começar
+        if (!clienteId) {
+            showNotification('Selecione um laboratório', 'error');
+            return;
         }
-
-        if (!contatoNome) return; // Force providing a contact
+        if (clienteId === 'outro' && (!novoClienteNome.trim() || !novoClienteRegiao)) {
+            showNotification('Preencha o nome e a região do novo laboratório', 'error');
+            return;
+        }
+        if (!contatoId) {
+            showNotification('Selecione ou cadastre um colaborador', 'error');
+            return;
+        }
+        if (contatoId === 'outro' && !novoContatoNome.trim()) {
+            showNotification('Preencha o nome do novo colaborador', 'error');
+            return;
+        }
+        if (!titulo.trim() || !descricao.trim() || !categoriaId) {
+            showNotification('Preencha todos os campos obrigatórios do chamado', 'error');
+            return;
+        }
 
         setSaving(true);
         try {
@@ -79,6 +88,7 @@ export default function NewTicket() {
                 const novoCli = await addCliente({ 
                     nome: novoClienteNome.trim(), 
                     contato: novoClienteContato.trim() || 'Não informado',
+                    regiao: novoClienteRegiao as 'Norte' | 'Sul',
                     ativo: true 
                 });
                 finalClienteId = novoCli.id;
@@ -93,35 +103,40 @@ export default function NewTicket() {
                 finalCategoriaId = novaCat.id;
             }
 
-            // 3. Handle contact name
-            let contatoNome = undefined;
+            // 3. Handle contact name/creation
+            let contatoNomeFinal = '';
             if (contatoId === 'outro' && novoContatoNome.trim()) {
-                contatoNome = novoContatoNome.trim();
-                // Automatically add this new contact to the DB for future use
-                await addContato(finalClienteId, contatoNome, novoContatoTelefone.trim() || undefined);
+                contatoNomeFinal = novoContatoNome.trim();
+                // Agora usamos o finalClienteId (que pode ser o recém criado)
+                await addContato(finalClienteId, contatoNomeFinal, novoContatoTelefone.trim() || undefined);
             } else if (contatoId) {
                 const selectedContact = contatos.find(c => c.id === contatoId);
-                if (selectedContact) contatoNome = selectedContact.nome;
+                if (selectedContact) {
+                    contatoNomeFinal = selectedContact.nome;
+                }
             }
 
-            if (!contatoNome) {
+            if (!contatoNomeFinal) {
+                showNotification('Nome do solicitante é obrigatório', 'error');
                 setSaving(false);
                 return;
             }
 
+            // 4. Criar o chamado
             await criarChamado({ 
                 clienteId: finalClienteId, 
-                contatoNome, 
+                contatoNome: contatoNomeFinal, 
                 categoriaId: finalCategoriaId, 
                 titulo: titulo.trim(), 
                 descricao: descricao.trim(), 
                 prioridade 
             });
+
             showNotification('Chamado aberto com sucesso!', 'success');
             navigate('/');
         } catch (error: any) {
             console.error('Erro ao criar chamado:', error);
-            showNotification('Erro ao abrir chamado. Verifique sua conexão.', 'error');
+            showNotification(error.message || 'Erro ao abrir chamado. Verifique sua conexão.', 'error');
         } finally {
             setSaving(false);
         }
@@ -142,6 +157,7 @@ export default function NewTicket() {
                             if (e.target.value !== 'outro') {
                                 setNovoClienteNome('');
                                 setNovoClienteContato('');
+                                setNovoClienteRegiao('');
                             }
                             setContatoId('');
                             setNovoContatoNome('');
@@ -170,6 +186,18 @@ export default function NewTicket() {
                                     />
                                 </div>
                                 <div className="form-group" style={{ marginBottom: 0 }}>
+                                    <label>Região *</label>
+                                    <select 
+                                        value={novoClienteRegiao} 
+                                        onChange={(e) => setNovoClienteRegiao(e.target.value as 'Norte' | 'Sul')}
+                                        required
+                                    >
+                                        <option value="">Selecione...</option>
+                                        <option value="Norte">Norte</option>
+                                        <option value="Sul">Sul</option>
+                                    </select>
+                                </div>
+                                <div className="form-group" style={{ marginBottom: 0, gridColumn: 'span 2' }}>
                                     <label>Telefone / Contato</label>
                                     <input
                                         type="text"
@@ -306,7 +334,7 @@ export default function NewTicket() {
                             disabled={
                                 saving || 
                                 !clienteId || 
-                                (clienteId === 'outro' && !novoClienteNome.trim()) ||
+                                (clienteId === 'outro' && (!novoClienteNome.trim() || !novoClienteRegiao)) ||
                                 !categoriaId || 
                                 (categoriaId === 'outro' && !novaCategoriaNome.trim()) ||
                                 !contatoId || 
