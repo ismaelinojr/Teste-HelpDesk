@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { useApp } from '../../context/AppContext';
 import { TicketCheck, Clock, AlertTriangle, Users, Calendar } from 'lucide-react';
+import { calcularSLA } from '../../utils/sla';
 
 export default function IndicadoresInternos() {
     const { chamados, categoriasChamado, clientes, usuarios } = useApp();
@@ -65,13 +66,7 @@ export default function IndicadoresInternos() {
 
         // SLA Violation
         const violados = chamadosFiltrados.filter(c => {
-            if (c.status === 'fechado' && c.dataFechamento) {
-                const abertura = new Date(c.dataAbertura).getTime();
-                const fechamento = new Date(c.dataFechamento).getTime();
-                const diffHoras = (fechamento - abertura) / (1000 * 60 * 60);
-                return diffHoras > c.slaHoras;
-            }
-            return false;
+            return calcularSLA(c).status === 'vencido';
         }).length;
 
         // Rankings
