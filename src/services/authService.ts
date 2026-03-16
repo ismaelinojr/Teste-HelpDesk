@@ -37,24 +37,26 @@ export async function inviteUser(email: string, nome: string, role: string) {
     return data;
 }
 
-export async function getCurrentSession(): Promise<Session | null> {
+export async function getCurrentSession(): Promise<Session | null | undefined> {
     console.log('[AuthService] Chamando getSession()...');
     
     // Fallback/Timeout setup to prevent navigator.locks deadlocks
-    const timeoutPromise = new Promise<never>((_, reject) => 
+    const timeoutPromise = new Promise<undefined>((_, reject) => 
         setTimeout(() => reject(new Error('Timeout ao obter sessão (possível bloqueio no Web Locks API)')), 5000)
     );
 
     try {
-        const { data: { session } } = await Promise.race([
-            supabase.auth.getSession(),
+        const result = await Promise.race([
+            supabase.auth.getSession().then(({ data: { session } }) => session),
             timeoutPromise
         ]);
-        console.log('[AuthService] getSession() retornou com sucesso.');
-        return session;
+        console.log('[AuthService] getSession() retornou com sucesso:', result ? 'Sessão ativa' : 'Sem sessão');
+        return result;
     } catch (error) {
         console.error('[AuthService] Erro ou timeout no getSession:', error);
-        return null;
+        // Retornamos undefined para indicar que não conseguimos verificar a sessão técnica (falha técnica)
+        // null seria retornado apenas se o Supabase respondesse explicitamente que não há sessão.
+        return undefined;
     }
 }
 

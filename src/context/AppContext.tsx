@@ -565,10 +565,15 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             if (state.isAuthenticated) {
                 console.log('[AppContext] Aba focada, verificando sessão e dados...');
                 authService.getCurrentSession().then(session => {
-                    if (!session) {
-                        // Se a sessão expirou totalmente enquanto estava inativo
+                    if (session === null) {
+                        // Se a sessão expirou totalmente (confirmado pelo Supabase)
+                        console.warn('[AppContext] Sessão expirada confirmada, realizando logout...');
                         logout();
+                    } else if (session === undefined) {
+                        // Se houve falha técnica/timeout, não deslogamos, apenas avisamos no console
+                        console.warn('[AppContext] Não foi possível validar a sessão (timeout/rede). Mantendo estado local.');
                     } else {
+                        // Sessão válida, recarrega dados para garantir frescor
                         loadData();
                     }
                 });

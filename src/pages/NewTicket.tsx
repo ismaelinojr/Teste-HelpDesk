@@ -6,11 +6,22 @@ import type { Prioridade, ContatoCliente } from '../types';
 import { ArrowLeft, Save, Loader2 } from 'lucide-react';
 
 export default function NewTicket() {
-    const { clientes, criarChamado, getContatosByCliente, addContato, categoriasChamado, slaConfigs } = useApp();
+    const { 
+        clientes, 
+        addCliente, 
+        criarChamado, 
+        getContatosByCliente, 
+        addContato, 
+        categoriasChamado, 
+        addCategoria, 
+        slaConfigs 
+    } = useApp();
     const { showNotification } = useNotification();
     const navigate = useNavigate();
 
     const [clienteId, setClienteId] = useState('');
+    const [novoClienteNome, setNovoClienteNome] = useState('');
+    const [novoClienteContato, setNovoClienteContato] = useState('');
     const [contatos, setContatos] = useState<ContatoCliente[]>([]);
     const [contatoId, setContatoId] = useState('');
 
@@ -21,14 +32,19 @@ export default function NewTicket() {
     const [titulo, setTitulo] = useState('');
     const [descricao, setDescricao] = useState('');
     const [categoriaId, setCategoriaId] = useState('');
+    const [novaCategoriaNome, setNovaCategoriaNome] = useState('');
     const [prioridade, setPrioridade] = useState<Prioridade>('normal');
     const [saving, setSaving] = useState(false);
 
     // Load contacts when client is selected
     useEffect(() => {
-        if (!clienteId) {
+        if (!clienteId || clienteId === 'outro') {
             setContatos([]);
-            setContatoId('');
+            if (clienteId === 'outro') {
+                setContatoId('outro');
+            } else {
+                setContatoId('');
+            }
             setNovoContatoNome('');
             setNovoContatoTelefone('');
             return;
@@ -55,7 +71,52 @@ export default function NewTicket() {
 
         setSaving(true);
         try {
-            await criarChamado({ clienteId, contatoNome, categoriaId, titulo: titulo.trim(), descricao: descricao.trim(), prioridade });
+            let finalClienteId = clienteId;
+            let finalCategoriaId = categoriaId;
+
+            // 1. Cadastrar novo laboratório se selecionado
+            if (clienteId === 'outro' && novoClienteNome.trim()) {
+                const novoCli = await addCliente({ 
+                    nome: novoClienteNome.trim(), 
+                    contato: novoClienteContato.trim() || 'Não informado',
+                    ativo: true 
+                });
+                finalClienteId = novoCli.id;
+            }
+
+            // 2. Cadastrar novo tipo de chamado se selecionado
+            if (categoriaId === 'outro' && novaCategoriaNome.trim()) {
+                const novaCat = await addCategoria({ 
+                    nome: novaCategoriaNome.trim(),
+                    ativo: true 
+                });
+                finalCategoriaId = novaCat.id;
+            }
+
+            // 3. Handle contact name
+            let contatoNome = undefined;
+            if (contatoId === 'outro' && novoContatoNome.trim()) {
+                contatoNome = novoContatoNome.trim();
+                // Automatically add this new contact to the DB for future use
+                await addContato(finalClienteId, contatoNome, novoContatoTelefone.trim() || undefined);
+            } else if (contatoId) {
+                const selectedContact = contatos.find(c => c.id === contatoId);
+                if (selectedContact) contatoNome = selectedContact.nome;
+            }
+
+            if (!contatoNome) {
+                setSaving(false);
+                return;
+            }
+
+            await criarChamado({ 
+                clienteId: finalClienteId, 
+                contatoNome, 
+                categoriaId: finalCategoriaId, 
+                titulo: titulo.trim(), 
+                descricao: descricao.trim(), 
+                prioridade 
+            });
             showNotification('Chamado aberto com sucesso!', 'success');
             navigate('/');
         } catch (error: any) {
@@ -78,6 +139,10 @@ export default function NewTicket() {
                         <label>Laboratório *</label>
                         <select value={clienteId} onChange={(e) => {
                             setClienteId(e.target.value);
+                            if (e.target.value !== 'outro') {
+                                setNovoClienteNome('');
+                                setNovoClienteContato('');
+                            }
                             setContatoId('');
                             setNovoContatoNome('');
                             setNovoContatoTelefone('');
@@ -86,8 +151,36 @@ export default function NewTicket() {
                             {clientes.map(c => (
                                 <option key={c.id} value={c.id}>{c.nome}</option>
                             ))}
+                            <option value="outro">+ Outro / Novo Cadastro</option>
                         </select>
                     </div>
+
+                    {clienteId === 'outro' && (
+                        <div className="admin-card slide-down" style={{ marginTop: 0, marginBottom: 16, padding: 16, border: '1px solid var(--border)', background: 'var(--bg-card)' }}>
+                            <h4 style={{ margin: '0 0 12px 0', fontSize: 13, color: 'var(--text-secondary)' }}>Dados do Novo Laboratório</h4>
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+                                <div className="form-group" style={{ marginBottom: 0 }}>
+                                    <label>Nome do Laboratório *</label>
+                                    <input
+                                        type="text"
+                                        value={novoClienteNome}
+                                        onChange={(e) => setNovoClienteNome(e.target.value)}
+                                        placeholder="Ex: Laboratório Central"
+                                        required
+                                    />
+                                </div>
+                                <div className="form-group" style={{ marginBottom: 0 }}>
+                                    <label>Telefone / Contato</label>
+                                    <input
+                                        type="text"
+                                        value={novoClienteContato}
+                                        onChange={(e) => setNovoClienteContato(e.target.value)}
+                                        placeholder="(11) 9999-9999"
+                                    />
+                                </div>
+                            </div>
+                        </div>
+                    )}
 
                     <div className="form-group">
                         <label>Colaborador / Solicitante *</label>
@@ -158,13 +251,35 @@ export default function NewTicket() {
 
                     <div className="form-group">
                         <label>Tipo de Chamado *</label>
-                        <select value={categoriaId} onChange={(e) => setCategoriaId(e.target.value)} required>
+                        <select value={categoriaId} onChange={(e) => {
+                            setCategoriaId(e.target.value);
+                            if (e.target.value !== 'outro') {
+                                setNovaCategoriaNome('');
+                            }
+                        }} required>
                             <option value="">Selecione o tipo...</option>
                             {categoriasChamado.map(cat => (
                                 <option key={cat.id} value={cat.id}>{cat.nome}</option>
                             ))}
+                            <option value="outro">+ Outro / Novo Cadastro</option>
                         </select>
                     </div>
+
+                    {categoriaId === 'outro' && (
+                        <div className="admin-card slide-down" style={{ marginTop: 0, marginBottom: 16, padding: 16, border: '1px solid var(--border)', background: 'var(--bg-card)' }}>
+                            <h4 style={{ margin: '0 0 12px 0', fontSize: 13, color: 'var(--text-secondary)' }}>Novo Tipo de Chamado</h4>
+                            <div className="form-group" style={{ marginBottom: 0 }}>
+                                <label>Nome do Tipo / Categoria *</label>
+                                <input
+                                    type="text"
+                                    value={novaCategoriaNome}
+                                    onChange={(e) => setNovaCategoriaNome(e.target.value)}
+                                    placeholder="Ex: Problema com Software"
+                                    required
+                                />
+                            </div>
+                        </div>
+                    )}
 
                     <div className="form-group">
                         <label>Prioridade / SLA</label>
@@ -188,7 +303,17 @@ export default function NewTicket() {
                         <button
                             type="submit"
                             className="btn btn-primary"
-                            disabled={saving || !clienteId || !categoriaId || !contatoId || (contatoId === 'outro' && !novoContatoNome.trim()) || !titulo.trim() || !descricao.trim()}
+                            disabled={
+                                saving || 
+                                !clienteId || 
+                                (clienteId === 'outro' && !novoClienteNome.trim()) ||
+                                !categoriaId || 
+                                (categoriaId === 'outro' && !novaCategoriaNome.trim()) ||
+                                !contatoId || 
+                                (contatoId === 'outro' && !novoContatoNome.trim()) || 
+                                !titulo.trim() || 
+                                !descricao.trim()
+                            }
                         >
                             {saving ? (
                                 <>
