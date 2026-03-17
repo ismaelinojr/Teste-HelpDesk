@@ -22,7 +22,7 @@ export default function ClientesPanel() {
     const filteredClientes = clientes.filter((c: Cliente) =>
         c.nome.toLowerCase().includes(search.toLowerCase()) ||
         c.contato.includes(search)
-    );
+    ).sort((a, b) => a.nome.localeCompare(b.nome));
 
     const handleOpenNew = () => {
         setEditingCliente(null);
@@ -113,48 +113,58 @@ export default function ClientesPanel() {
                 </button>
             </div>
 
-            <div className="admin-list grid-list">
+            <div className="compact-list">
                 {filteredClientes.map(cliente => (
-                    <div key={cliente.id} className={`admin-card ${cliente.ativo === false ? 'inactive' : ''}`} style={{
-                        opacity: cliente.ativo === false ? 0.6 : 1,
-                        display: 'flex',
-                        justifyContent: 'space-between',
-                        alignItems: 'center'
-                    }}>
-                        <div>
-                            <h3 style={{ margin: '0 0 8px 0', display: 'flex', alignItems: 'center', gap: 6 }}>
-                                <Building2 size={16} color="var(--accent)" />
-                                {cliente.nome}
-                                {cliente.ativo === false && <span className="badge-inactive" style={{ fontSize: 10, padding: '2px 6px', background: 'var(--danger)', color: 'white', borderRadius: 4, marginLeft: 8 }}>Inativo</span>}
-                            </h3>
-                            <p style={{ margin: 0, color: 'var(--text-secondary)', fontSize: 13 }}>
-                                Contato: {cliente.contato}
-                                {cliente.regiao && (
-                                    <span style={{ marginLeft: 12, padding: '2px 8px', borderRadius: 12, backgroundColor: 'var(--bg-hover)', fontSize: 12 }}>
-                                        Região: <strong>{cliente.regiao}</strong>
+                    <div key={cliente.id} className={`list-item ${cliente.ativo === false ? 'inactive' : ''}`}>
+                        <div className="item-main">
+                            <div className="item-icon">
+                                <Building2 size={20} />
+                            </div>
+                            <div className="item-info">
+                                <div className="item-title">
+                                    {cliente.nome}
+                                    {cliente.ativo === false && (
+                                        <span className="badge-inactive" style={{ fontSize: 10, padding: '2px 6px', background: 'var(--danger)', color: 'white', borderRadius: 4 }}>
+                                            Inativo
+                                        </span>
+                                    )}
+                                </div>
+                                <div className="item-sub">
+                                    <span className="item-sub-item">
+                                        <strong>Contato:</strong> {cliente.contato}
                                     </span>
-                                )}
-                            </p>
+                                    {cliente.regiao && (
+                                        <span className="item-sub-item" style={{ color: 'var(--accent)' }}>
+                                            <strong>Região:</strong> {cliente.regiao}
+                                        </span>
+                                    )}
+                                </div>
+                            </div>
                         </div>
-                        <div className="card-actions" style={{ display: 'flex', gap: 8 }}>
-                            <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', fontSize: 13, color: 'var(--text-secondary)' }}>
+                        <div className="item-actions">
+                            <label className="item-toggle">
                                 <input 
                                     type="checkbox" 
                                     checked={cliente.ativo !== false} 
                                     onChange={(e) => handleToggleActive(cliente, e.target.checked)} 
-                                    style={{ accentColor: 'var(--accent)', width: 16, height: 16, cursor: 'pointer' }}
                                 />
                                 Ativo
                             </label>
-                            <button className="btn-icon" onClick={() => handleOpenEdit(cliente)} title="Editar" style={{ background: 'var(--bg-hover)', border: 'none', padding: 8, borderRadius: 6, cursor: 'pointer', color: 'var(--text-primary)' }}>
-                                <Edit2 size={16} />
+                            <button className="btn-ghost" onClick={() => handleOpenEdit(cliente)} title="Editar">
+                                <Edit2 size={18} />
                             </button>
-                            <button className="btn-icon" onClick={() => handleDelete(cliente)} title="Excluir Laboratório" style={{ background: 'var(--bg-hover)', border: 'none', padding: 8, borderRadius: 6, cursor: 'pointer', color: 'var(--danger)' }}>
-                                <Trash2 size={16} />
+                            <button className="btn-ghost" onClick={() => handleDelete(cliente)} title="Excluir Laboratório" style={{ color: 'var(--danger)' }}>
+                                <Trash2 size={18} />
                             </button>
                         </div>
                     </div>
                 ))}
+
+                {filteredClientes.length === 0 && (
+                    <div style={{ padding: '40px', textAlign: 'center', color: 'var(--text-muted)' }}>
+                        Nenhum laboratório encontrado.
+                    </div>
+                )}
             </div>
 
             <ModalForm

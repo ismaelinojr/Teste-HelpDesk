@@ -41,7 +41,7 @@ export default function UsuariosPanel() {
     const filteredUsuarios = usuarios.filter(u =>
         u.nome.toLowerCase().includes(search.toLowerCase()) ||
         u.email.toLowerCase().includes(search.toLowerCase())
-    );
+    ).sort((a, b) => a.nome.localeCompare(b.nome));
 
     const openConfirm = (
         title: string, 
@@ -234,52 +234,62 @@ export default function UsuariosPanel() {
                 </button>
             </div>
 
-            <div className="admin-list grid-list">
+            <div className="compact-list">
                 {filteredUsuarios.map(usuario => (
-                    <div key={usuario.id} className={`admin-card ${usuario.ativo === false ? 'inactive' : ''}`} style={{
-                        opacity: usuario.ativo === false ? 0.6 : 1,
-                        display: 'flex',
-                        justifyContent: 'space-between',
-                        alignItems: 'center'
-                    }}>
-                        <div>
-                            <h3 style={{ margin: '0 0 8px 0', display: 'flex', alignItems: 'center', gap: 6 }}>
-                                <Users size={16} color="var(--accent)" />
-                                {usuario.nome}
-                                {usuario.ativo === false && <span className="badge-inactive" style={{ fontSize: 10, padding: '2px 6px', background: 'var(--danger)', color: 'white', borderRadius: 4, marginLeft: 8 }}>Inativo</span>}
-                            </h3>
-                            <p style={{ margin: '0 0 4px 0', color: 'var(--text-secondary)', fontSize: 13 }}>
-                                Email: {usuario.email}
-                            </p>
-                            <span className={`user-role-badge ${usuario.role}`} style={{ display: 'inline-flex', fontSize: 11, padding: '2px 8px', borderRadius: 12 }}>
-                                {usuario.role}
-                            </span>
+                    <div key={usuario.id} className={`list-item ${usuario.ativo === false ? 'inactive' : ''}`}>
+                        <div className="item-main">
+                            <div className="item-icon">
+                                <Users size={20} />
+                            </div>
+                            <div className="item-info">
+                                <div className="item-title">
+                                    {usuario.nome}
+                                    {usuario.ativo === false && (
+                                        <span className="badge-inactive" style={{ fontSize: 10, padding: '2px 6px', background: 'var(--danger)', color: 'white', borderRadius: 4 }}>
+                                            Inativo
+                                        </span>
+                                    )}
+                                </div>
+                                <div className="item-sub">
+                                    <span className="item-sub-item">
+                                        <Mail size={12} /> {usuario.email}
+                                    </span>
+                                    <span className={`user-role-badge ${usuario.role}`} style={{ fontSize: 10 }}>
+                                        {usuario.role}
+                                    </span>
+                                </div>
+                            </div>
                         </div>
-                        <div className="card-actions" style={{ display: 'flex', gap: 8 }}>
-                            <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', fontSize: 13, color: 'var(--text-secondary)' }}>
+                        <div className="item-actions">
+                            <label className="item-toggle">
                                 <input 
                                     type="checkbox" 
                                     checked={usuario.ativo !== false} 
                                     onChange={(e) => handleToggleActive(usuario, e.target.checked)} 
-                                    style={{ accentColor: 'var(--accent)', width: 16, height: 16, cursor: 'pointer' }}
                                 />
                                 Ativo
                             </label>
-                            <button className="btn-icon" onClick={() => handleResendInvite(usuario)} title="Reenviar Convite" disabled={loadingAction === `invite-${usuario.id}`} style={{ background: 'var(--bg-hover)', border: 'none', padding: 8, borderRadius: 6, cursor: 'pointer', color: 'var(--accent)' }}>
-                                {loadingAction === `invite-${usuario.id}` ? <Loader2 size={16} className="animate-spin" /> : <Mail size={16} />}
+                            <button className="btn-ghost" onClick={() => handleResendInvite(usuario)} title="Reenviar Convite" disabled={loadingAction === `invite-${usuario.id}`} style={{ color: 'var(--accent)' }}>
+                                {loadingAction === `invite-${usuario.id}` ? <Loader2 size={16} className="animate-spin" /> : <Mail size={18} />}
                             </button>
-                            <button className="btn-icon" onClick={() => handleResetPassword(usuario)} title="Redefinir Senha" disabled={loadingAction === `reset-${usuario.id}`} style={{ background: 'var(--bg-hover)', border: 'none', padding: 8, borderRadius: 6, cursor: 'pointer', color: 'var(--warning, #f97316)' }}>
-                                {loadingAction === `reset-${usuario.id}` ? <Loader2 size={16} className="animate-spin" /> : <Key size={16} />}
+                            <button className="btn-ghost" onClick={() => handleResetPassword(usuario)} title="Redefinir Senha" disabled={loadingAction === `reset-${usuario.id}`} style={{ color: 'var(--warning, #f97316)' }}>
+                                {loadingAction === `reset-${usuario.id}` ? <Loader2 size={16} className="animate-spin" /> : <Key size={18} />}
                             </button>
-                            <button className="btn-icon" onClick={() => handleOpenEdit(usuario)} title="Editar" style={{ background: 'var(--bg-hover)', border: 'none', padding: 8, borderRadius: 6, cursor: 'pointer', color: 'var(--text-primary)' }}>
-                                <Edit2 size={16} />
+                            <button className="btn-ghost" onClick={() => handleOpenEdit(usuario)} title="Editar">
+                                <Edit2 size={18} />
                             </button>
-                            <button className="btn-icon" onClick={() => handleDelete(usuario)} title="Excluir Usuário" style={{ background: 'var(--bg-hover)', border: 'none', padding: 8, borderRadius: 6, cursor: 'pointer', color: 'var(--danger)' }}>
-                                <Trash2 size={16} />
+                            <button className="btn-ghost" onClick={() => handleDelete(usuario)} title="Excluir Usuário" style={{ color: 'var(--danger)' }}>
+                                <Trash2 size={18} />
                             </button>
                         </div>
                     </div>
                 ))}
+
+                {filteredUsuarios.length === 0 && (
+                    <div style={{ padding: '40px', textAlign: 'center', color: 'var(--text-muted)' }}>
+                        Nenhum usuário encontrado.
+                    </div>
+                )}
             </div>
 
             <ConfirmModal

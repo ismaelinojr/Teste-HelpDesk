@@ -17,7 +17,7 @@ export default function CategoriasPanel() {
     const filteredCategorias = categoriasChamado.filter(c =>
         c.nome.toLowerCase().includes(search.toLowerCase()) ||
         (c.descricao && c.descricao.toLowerCase().includes(search.toLowerCase()))
-    );
+    ).sort((a, b) => a.nome.localeCompare(b.nome));
 
     const handleOpenNew = () => {
         setEditingCategoria(null);
@@ -88,43 +88,53 @@ export default function CategoriasPanel() {
                 </button>
             </div>
 
-            <div className="admin-list grid-list">
+            <div className="compact-list">
                 {filteredCategorias.map(categoria => (
-                    <div key={categoria.id} className={`admin-card ${categoria.ativo === false ? 'inactive' : ''}`} style={{
-                        opacity: categoria.ativo === false ? 0.6 : 1,
-                        display: 'flex',
-                        justifyContent: 'space-between',
-                        alignItems: 'center'
-                    }}>
-                        <div>
-                            <h3 style={{ margin: '0 0 8px 0', display: 'flex', alignItems: 'center', gap: 6 }}>
-                                <Tags size={16} color="var(--accent)" />
-                                {categoria.nome}
-                                {categoria.ativo === false && <span className="badge-inactive" style={{ fontSize: 10, padding: '2px 6px', background: 'var(--danger)', color: 'white', borderRadius: 4, marginLeft: 8 }}>Inativa</span>}
-                            </h3>
-                            <p style={{ margin: 0, color: 'var(--text-secondary)', fontSize: 13 }}>
-                                {categoria.descricao || 'Sem descrição'}
-                            </p>
+                    <div key={categoria.id} className={`list-item ${categoria.ativo === false ? 'inactive' : ''}`}>
+                        <div className="item-main">
+                            <div className="item-icon">
+                                <Tags size={20} />
+                            </div>
+                            <div className="item-info">
+                                <div className="item-title">
+                                    {categoria.nome}
+                                    {categoria.ativo === false && (
+                                        <span className="badge-inactive" style={{ fontSize: 10, padding: '2px 6px', background: 'var(--danger)', color: 'white', borderRadius: 4 }}>
+                                            Inativa
+                                        </span>
+                                    )}
+                                </div>
+                                <div className="item-sub">
+                                    <span className="item-sub-item">
+                                        {categoria.descricao || 'Sem descrição'}
+                                    </span>
+                                </div>
+                            </div>
                         </div>
-                        <div className="card-actions" style={{ display: 'flex', gap: 8 }}>
-                            <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', fontSize: 13, color: 'var(--text-secondary)' }}>
+                        <div className="item-actions">
+                            <label className="item-toggle">
                                 <input 
                                     type="checkbox" 
                                     checked={categoria.ativo !== false} 
                                     onChange={(e) => handleToggleActive(categoria, e.target.checked)} 
-                                    style={{ accentColor: 'var(--accent)', width: 16, height: 16, cursor: 'pointer' }}
                                 />
                                 Ativa
                             </label>
-                            <button className="btn-icon" onClick={() => handleOpenEdit(categoria)} title="Editar" style={{ background: 'var(--bg-hover)', border: 'none', padding: 8, borderRadius: 6, cursor: 'pointer', color: 'var(--text-primary)' }}>
-                                <Edit2 size={16} />
+                            <button className="btn-ghost" onClick={() => handleOpenEdit(categoria)} title="Editar">
+                                <Edit2 size={18} />
                             </button>
-                            <button className="btn-icon" onClick={() => handleDelete(categoria)} title="Excluir Categoria" style={{ background: 'var(--bg-hover)', border: 'none', padding: 8, borderRadius: 6, cursor: 'pointer', color: 'var(--danger)' }}>
-                                <Trash2 size={16} />
+                            <button className="btn-ghost" onClick={() => handleDelete(categoria)} title="Excluir Categoria" style={{ color: 'var(--danger)' }}>
+                                <Trash2 size={18} />
                             </button>
                         </div>
                     </div>
                 ))}
+
+                {filteredCategorias.length === 0 && (
+                    <div style={{ padding: '40px', textAlign: 'center', color: 'var(--text-muted)' }}>
+                        Nenhuma categoria encontrada.
+                    </div>
+                )}
             </div>
 
             <ModalForm

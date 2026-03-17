@@ -15,7 +15,10 @@ export default function StatusPanel() {
     const [cor, setCor] = useState('#8E7CFF');
     const [ordem, setOrdem] = useState(1);
 
-    const allStatuses = [...statusConfigs].sort((a, b) => a.ordem - b.ordem);
+    const allStatuses = [...statusConfigs].sort((a, b) => {
+        if (a.ordem !== b.ordem) return a.ordem - b.ordem;
+        return a.nome.localeCompare(b.nome);
+    });
     const filteredStatuses = allStatuses.filter(s =>
         s.nome.toLowerCase().includes(search.toLowerCase())
     );
@@ -75,44 +78,49 @@ export default function StatusPanel() {
                 </button>
             </div>
 
-            <div className="admin-list grid-list">
+            <div className="compact-list">
                 {filteredStatuses.map(status => (
-                    <div key={status.id} className={`admin-card ${status.ativo === false ? 'inactive' : ''}`} style={{
-                        opacity: status.ativo === false ? 0.6 : 1,
-                        display: 'flex',
-                        justifyContent: 'space-between',
-                        alignItems: 'center'
-                    }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                            <GripVertical size={16} color="var(--text-muted)" />
-                            <div>
-                                <h3 style={{ margin: '0 0 6px 0', display: 'flex', alignItems: 'center', gap: 8 }}>
-                                    <span style={{
-                                        width: 12,
-                                        height: 12,
-                                        borderRadius: '50%',
-                                        background: status.cor,
-                                        display: 'inline-block',
-                                        flexShrink: 0,
-                                    }} />
+                    <div key={status.id} className={`list-item ${status.ativo === false ? 'inactive' : ''}`}>
+                        <div className="item-main">
+                            <GripVertical size={16} color="var(--text-muted)" style={{ cursor: 'grab' }} />
+                            <div className="item-icon" style={{ background: `${status.cor}20` }}>
+                                <div style={{ width: 12, height: 12, borderRadius: '50%', background: status.cor }} />
+                            </div>
+                            <div className="item-info">
+                                <div className="item-title">
                                     {status.nome}
-                                    {status.ativo === false && <span style={{ fontSize: 10, padding: '2px 6px', background: 'var(--danger)', color: 'white', borderRadius: 4 }}>Inativo</span>}
-                                </h3>
-                                <p style={{ margin: 0, color: 'var(--text-secondary)', fontSize: 12 }}>
-                                    ID: <code style={{ color: 'var(--accent)', fontSize: 11 }}>{status.id}</code> · Ordem: {status.ordem}
-                                </p>
+                                    {status.ativo === false && (
+                                        <span className="badge-inactive" style={{ fontSize: 10, padding: '2px 6px', background: 'var(--danger)', color: 'white', borderRadius: 4 }}>
+                                            Inativo
+                                        </span>
+                                    )}
+                                </div>
+                                <div className="item-sub">
+                                    <span className="item-sub-item">
+                                        ID: <code style={{ color: 'var(--accent)', fontSize: 11 }}>{status.id}</code>
+                                    </span>
+                                    <span className="item-sub-item">
+                                        <strong>Ordem:</strong> {status.ordem}
+                                    </span>
+                                </div>
                             </div>
                         </div>
-                        <div className="card-actions" style={{ display: 'flex', gap: 8 }}>
-                            <button className="btn-icon" onClick={() => handleOpenEdit(status)} title="Editar" style={{ background: 'var(--bg-hover)', border: 'none', padding: 8, borderRadius: 6, cursor: 'pointer', color: 'var(--text-primary)' }}>
-                                <Edit2 size={16} />
+                        <div className="item-actions">
+                            <button className="btn-ghost" onClick={() => handleOpenEdit(status)} title="Editar">
+                                <Edit2 size={18} />
                             </button>
-                            <button className="btn-icon" onClick={() => handleToggleActive(status)} title={status.ativo === false ? 'Habilitar' : 'Desabilitar'} style={{ background: 'var(--bg-hover)', border: 'none', padding: 8, borderRadius: 6, cursor: 'pointer', color: status.ativo === false ? 'var(--success)' : 'var(--danger)' }}>
-                                {status.ativo === false ? <Power size={16} /> : <Trash2 size={16} />}
+                            <button className="btn-ghost" onClick={() => handleToggleActive(status)} title={status.ativo === false ? 'Habilitar' : 'Desabilitar'} style={{ color: status.ativo === false ? 'var(--success)' : 'var(--danger)' }}>
+                                {status.ativo === false ? <Power size={18} /> : <Trash2 size={18} />}
                             </button>
                         </div>
                     </div>
                 ))}
+
+                {filteredStatuses.length === 0 && (
+                    <div style={{ padding: '40px', textAlign: 'center', color: 'var(--text-muted)' }}>
+                        Nenhum status encontrado.
+                    </div>
+                )}
             </div>
 
             <ModalForm

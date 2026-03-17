@@ -17,7 +17,7 @@ export default function SLAPanel() {
 
     const filteredSLAs = slaConfigs.filter(s =>
         s.nome.toLowerCase().includes(search.toLowerCase())
-    );
+    ).sort((a, b) => a.nome.localeCompare(b.nome));
 
     const handleOpenNew = () => {
         setEditingSLA(null);
@@ -82,47 +82,45 @@ export default function SLAPanel() {
                 </button>
             </div>
 
-            <div className="admin-list grid-list">
+            <div className="compact-list">
                 {filteredSLAs.map(sla => (
-                    <div key={sla.id} className={`admin-card ${sla.ativo === false ? 'inactive' : ''}`} style={{
-                        opacity: sla.ativo === false ? 0.6 : 1,
-                        display: 'flex',
-                        justifyContent: 'space-between',
-                        alignItems: 'center'
-                    }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                            <div style={{
-                                width: 40,
-                                height: 40,
-                                borderRadius: 'var(--radius-md)',
-                                background: `${sla.cor}20`,
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                flexShrink: 0,
-                            }}>
-                                <Timer size={20} color={sla.cor} />
+                    <div key={sla.id} className={`list-item ${sla.ativo === false ? 'inactive' : ''}`}>
+                        <div className="item-main">
+                            <div className="item-icon" style={{ background: `${sla.cor}20` }}>
+                                <Timer size={22} color={sla.cor} />
                             </div>
-                            <div>
-                                <h3 style={{ margin: '0 0 4px 0', display: 'flex', alignItems: 'center', gap: 8 }}>
+                            <div className="item-info">
+                                <div className="item-title">
                                     {sla.nome}
-                                    {sla.ativo === false && <span style={{ fontSize: 10, padding: '2px 6px', background: 'var(--danger)', color: 'white', borderRadius: 4 }}>Inativo</span>}
-                                </h3>
-                                <p style={{ margin: 0, color: 'var(--text-secondary)', fontSize: 13 }}>
-                                    Tempo de resposta: <strong style={{ color: sla.cor }}>{formatHoras(sla.horas)}</strong>
-                                </p>
+                                    {sla.ativo === false && (
+                                        <span className="badge-inactive" style={{ fontSize: 10, padding: '2px 6px', background: 'var(--danger)', color: 'white', borderRadius: 4 }}>
+                                            Inativo
+                                        </span>
+                                    )}
+                                </div>
+                                <div className="item-sub">
+                                    <span className="item-sub-item">
+                                        Tempo de resposta: <strong style={{ color: sla.cor }}>{formatHoras(sla.horas)}</strong>
+                                    </span>
+                                </div>
                             </div>
                         </div>
-                        <div className="card-actions" style={{ display: 'flex', gap: 8 }}>
-                            <button className="btn-icon" onClick={() => handleOpenEdit(sla)} title="Editar" style={{ background: 'var(--bg-hover)', border: 'none', padding: 8, borderRadius: 6, cursor: 'pointer', color: 'var(--text-primary)' }}>
-                                <Edit2 size={16} />
+                        <div className="item-actions">
+                            <button className="btn-ghost" onClick={() => handleOpenEdit(sla)} title="Editar">
+                                <Edit2 size={18} />
                             </button>
-                            <button className="btn-icon" onClick={() => handleToggleActive(sla)} title={sla.ativo === false ? 'Habilitar' : 'Desabilitar'} style={{ background: 'var(--bg-hover)', border: 'none', padding: 8, borderRadius: 6, cursor: 'pointer', color: sla.ativo === false ? 'var(--success)' : 'var(--danger)' }}>
-                                {sla.ativo === false ? <Power size={16} /> : <Trash2 size={16} />}
+                            <button className="btn-ghost" onClick={() => handleToggleActive(sla)} title={sla.ativo === false ? 'Habilitar' : 'Desabilitar'} style={{ color: sla.ativo === false ? 'var(--success)' : 'var(--danger)' }}>
+                                {sla.ativo === false ? <Power size={18} /> : <Trash2 size={18} />}
                             </button>
                         </div>
                     </div>
                 ))}
+
+                {filteredSLAs.length === 0 && (
+                    <div style={{ padding: '40px', textAlign: 'center', color: 'var(--text-muted)' }}>
+                        Nenhum SLA encontrado.
+                    </div>
+                )}
             </div>
 
             <ModalForm

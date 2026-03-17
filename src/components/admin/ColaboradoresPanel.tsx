@@ -24,7 +24,7 @@ export default function ColaboradoresPanel() {
             labName.toLowerCase().includes(search.toLowerCase()) ||
             (c.telefone && c.telefone.includes(search)) ||
             (c.funcao && c.funcao.toLowerCase().includes(search.toLowerCase()));
-    });
+    }).sort((a, b) => a.nome.localeCompare(b.nome));
 
     const handleOpenNew = () => {
         setEditingContato(null);
@@ -120,48 +120,60 @@ export default function ColaboradoresPanel() {
                 </button>
             </div>
 
-            <div className="admin-list grid-list">
+            <div className="compact-list">
                 {filteredContatos.map(contato => (
-                    <div key={contato.id} className={`admin-card ${contato.ativo === false ? 'inactive' : ''}`} style={{
-                        opacity: contato.ativo === false ? 0.6 : 1,
-                        display: 'flex',
-                        justifyContent: 'space-between',
-                        alignItems: 'center'
-                    }}>
-                        <div>
-                            <h3 style={{ margin: '0 0 8px 0', display: 'flex', alignItems: 'center', gap: 6 }}>
-                                <Users size={16} color="var(--accent)" />
-                                {contato.nome}
-                                {contato.ativo === false && <span className="badge-inactive" style={{ fontSize: 10, padding: '2px 6px', background: 'var(--danger)', color: 'white', borderRadius: 4, marginLeft: 8 }}>Inativo</span>}
-                            </h3>
-                            <p style={{ margin: 0, color: 'var(--text-secondary)', fontSize: 13, display: 'flex', flexDirection: 'column', gap: 4 }}>
-                                <span><strong>Lab:</strong> {getLabName(contato.clienteId)}</span>
-                                <span><strong>Tel/WhatsApp:</strong> {contato.telefone || '-'}</span>
-                                <span><strong>Função:</strong> {contato.funcao || '-'}</span>
-                            </p>
+                    <div key={contato.id} className={`list-item ${contato.ativo === false ? 'inactive' : ''}`}>
+                        <div className="item-main">
+                            <div className="item-icon">
+                                <Users size={20} />
+                            </div>
+                            <div className="item-info">
+                                <div className="item-title">
+                                    {contato.nome}
+                                    {contato.ativo === false && (
+                                        <span className="badge-inactive" style={{ fontSize: 10, padding: '2px 6px', background: 'var(--danger)', color: 'white', borderRadius: 4 }}>
+                                            Inativo
+                                        </span>
+                                    )}
+                                </div>
+                                <div className="item-sub">
+                                    <span className="item-sub-item">
+                                        <strong>Lab:</strong> {getLabName(contato.clienteId)}
+                                    </span>
+                                    {contato.telefone && (
+                                        <span className="item-sub-item">
+                                            <strong>Tel:</strong> {contato.telefone}
+                                        </span>
+                                    )}
+                                    {contato.funcao && (
+                                        <span className="item-sub-item" style={{ color: 'var(--accent)' }}>
+                                            <strong>Função:</strong> {contato.funcao}
+                                        </span>
+                                    )}
+                                </div>
+                            </div>
                         </div>
-                        <div className="card-actions" style={{ display: 'flex', gap: 8 }}>
-                            <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', fontSize: 13, color: 'var(--text-secondary)' }}>
+                        <div className="item-actions">
+                            <label className="item-toggle">
                                 <input 
                                     type="checkbox" 
                                     checked={contato.ativo !== false} 
                                     onChange={(e) => handleToggleActive(contato, e.target.checked)} 
-                                    style={{ accentColor: 'var(--accent)', width: 16, height: 16, cursor: 'pointer' }}
                                 />
                                 Ativo
                             </label>
-                            <button className="btn-icon" onClick={() => handleOpenEdit(contato)} title="Editar" style={{ background: 'var(--bg-hover)', border: 'none', padding: 8, borderRadius: 6, cursor: 'pointer', color: 'var(--text-primary)' }}>
-                                <Edit2 size={16} />
+                            <button className="btn-ghost" onClick={() => handleOpenEdit(contato)} title="Editar">
+                                <Edit2 size={18} />
                             </button>
-                            <button className="btn-icon" onClick={() => handleDelete(contato)} title="Excluir Colaborador" style={{ background: 'var(--bg-hover)', border: 'none', padding: 8, borderRadius: 6, cursor: 'pointer', color: 'var(--danger)' }}>
-                                <Trash2 size={16} />
+                            <button className="btn-ghost" onClick={() => handleDelete(contato)} title="Excluir Colaborador" style={{ color: 'var(--danger)' }}>
+                                <Trash2 size={18} />
                             </button>
                         </div>
                     </div>
                 ))}
 
                 {filteredContatos.length === 0 && (
-                    <div style={{ padding: '20px', textAlign: 'center', color: 'var(--text-muted)', gridColumn: '1 / -1' }}>
+                    <div style={{ padding: '40px', textAlign: 'center', color: 'var(--text-muted)' }}>
                         Nenhum colaborador encontrado.
                     </div>
                 )}
