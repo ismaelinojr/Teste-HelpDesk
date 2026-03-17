@@ -536,7 +536,10 @@ tbody tr:hover {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  gap: 16px;
   transition: all var(--transition);
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .list-item:hover {
@@ -554,6 +557,7 @@ tbody tr:hover {
   align-items: center;
   gap: 16px;
   flex: 1;
+  min-width: 0; /* Permite que o conteúdo interno quebre se necessário */
 }
 
 .item-icon {
@@ -572,6 +576,8 @@ tbody tr:hover {
   display: flex;
   flex-direction: column;
   gap: 4px;
+  flex: 1;
+  min-width: 0;
 }
 
 .item-title {
@@ -581,6 +587,9 @@ tbody tr:hover {
   display: flex;
   align-items: center;
   gap: 8px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .item-sub {
@@ -630,18 +639,37 @@ tbody tr:hover {
   .list-item {
     flex-direction: column;
     align-items: flex-start;
-    gap: 16px;
+    gap: 12px;
+    padding: 12px 16px;
   }
 
   .item-main {
     width: 100%;
+    gap: 12px;
+  }
+
+  .item-icon {
+    width: 36px;
+    height: 36px;
+  }
+
+  .item-title {
+    font-size: 14px;
+    white-space: normal; /* Permite quebra de linha se o nome for muito longo no mobile */
   }
 
   .item-actions {
     width: 100%;
-    justify-content: flex-end;
+    justify-content: flex-start; /* Alinhado à esquerda no mobile */
     padding-top: 12px;
     border-top: 1px solid var(--border-color);
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .item-toggle {
+    padding: 4px 0;
+    width: 100%;
   }
 
   .item-sub {
