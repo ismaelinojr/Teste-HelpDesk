@@ -40,29 +40,33 @@ export async function inviteUser(email: string, nome: string, role: string) {
 export async function getCurrentSession(): Promise<Session | null | undefined> {
     console.log('[AuthService] Chamando getSession()...');
     
-    // Fallback/Timeout setup to prevent navigator.locks deadlocks
-    const timeoutPromise = new Promise<undefined>((_, reject) => 
-        setTimeout(() => reject(new Error('Timeout ao obter sessão (possível bloqueio no Web Locks API)')), 5000)
-    );
-
     try {
-        const result = await Promise.race([
+        // Usando withTimeout para ter um erro padronizado e limpo
+        const session = await withTimeout(
             supabase.auth.getSession().then(({ data: { session } }) => session),
-            timeoutPromise
-        ]);
-        console.log('[AuthService] getSession() retornou com sucesso:', result ? 'Sessão ativa' : 'Sem sessão');
-        return result;
-    } catch (error) {
+            8000,
+            'Timeout ao obter sessão do Supabase'
+        );
+        console.log('[AuthService] getSession() retornou com sucesso:', session ? 'Sessão ativa' : 'Sem sessão');
+        return session;
+    } catch (error: any) {
         console.error('[AuthService] Erro ou timeout no getSession:', error);
-        // Retornamos undefined para indicar que não conseguimos verificar a sessão técnica (falha técnica)
-        // null seria retornado apenas se o Supabase respondesse explicitamente que não há sessão.
+        // Retornamos undefined apenas em caso de erro técnico real ou timeout
         return undefined;
     }
 }
 
 export async function getCurrentUser(): Promise<User | null> {
-    const { data: { user } } = await supabase.auth.getUser();
-    return user;
+    try {
+        return await withTimeout(
+            supabase.auth.getUser().then(({ data: { user } }) => user),
+            8000,
+            'Timeout ao obter usuário do Supabase'
+        );
+    } catch (error) {
+        console.error('[AuthService] Erro ao buscar usuário atual:', error);
+        return null;
+    }
 }
 
 export function onAuthStateChange(callback: (event: AuthChangeEvent, session: Session | null) => void) {

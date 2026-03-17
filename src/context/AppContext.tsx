@@ -106,9 +106,15 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             const pContatos = clientService.getAllContatos();
             const pInteracoes = ticketService.getAllInteracoes();
 
-            const [chamados, usuarios, clientes, categorias, statuses, slas, contatos, allInteracoes] = await Promise.all([
-                pChamados, pUsuarios, pClientes, pCategorias, pStatuses, pSlas, pContatos, pInteracoes
-            ]);
+            // Envolvemos o Promise.all com um timeout global para o carregamento
+            const [chamados, usuarios, clientes, categorias, statuses, slas, contatos, allInteracoes] = await withTimeout(
+                Promise.all([
+                    pChamados, pUsuarios, pClientes, pCategorias, pStatuses, pSlas, pContatos, pInteracoes
+                ]),
+                30000,
+                'Tempo limite excedido ao carregar dados do sistema. Verifique sua conexão.'
+            );
+
             setState(prev => ({
                 ...prev,
                 chamados,
@@ -123,7 +129,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             }));
         } catch (err: any) {
             console.error('Erro ao carregar dados:', err);
-            showNotification('Falha ao carregar dados do sistema. Verifique sua conexão.', 'error');
+            showNotification(err.message || 'Falha ao carregar dados do sistema. Verifique sua conexão.', 'error');
             setState(prev => ({ ...prev, loading: false }));
         }
     }, [showNotification]);
@@ -561,28 +567,39 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
     // Verificação ao retomar foco: Garante que o sistema volte a vida ao trocar de aba/monitor
     useEffect(() => {
-        const handleFocus = () => {
-            if (state.isAuthenticated) {
+        let isChecking = false;
+
+        const handleFocus = async () => {
+            if (state.isAuthenticated && !isChecking) {
+                isChecking = true;
                 console.log('[AppContext] Aba focada, verificando sessão e dados...');
-                authService.getCurrentSession().then(session => {
+                
+                try {
+                    const session = await authService.getCurrentSession();
+                    
                     if (session === null) {
                         // Se a sessão expirou totalmente (confirmado pelo Supabase)
-                        console.warn('[AppContext] Sessão expirada confirmada, realizando logout...');
+                        console.warn('[AppContext] Sessão expirada confirmada ao focar, realizando logout...');
                         logout();
                     } else if (session === undefined) {
-                        // Se houve falha técnica/timeout, não deslogamos, apenas avisamos no console
-                        console.warn('[AppContext] Não foi possível validar a sessão (timeout/rede). Mantendo estado local.');
+                        // Se houve falha técnica/timeout
+                        console.warn('[AppContext] Não foi possível validar a sessão no foco (timeout/rede).');
+                        showNotification('Instabilidade de conexão detectada ao retomar o foco.', 'warning');
                     } else {
                         // Sessão válida, recarrega dados para garantir frescor
-                        loadData();
+                        await loadData();
                     }
-                });
+                } catch (err) {
+                    console.error('[AppContext] Erro no handleFocus:', err);
+                } finally {
+                    isChecking = false;
+                }
             }
         };
 
         window.addEventListener('focus', handleFocus);
         return () => window.removeEventListener('focus', handleFocus);
-    }, [state.isAuthenticated, loadData, logout]);
+    }, [state.isAuthenticated, loadData, logout, showNotification]);
 
     return (
         <AppContext.Provider value={{

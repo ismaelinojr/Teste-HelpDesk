@@ -1,5 +1,6 @@
 import { supabase } from '../lib/supabaseClient';
 import type { Chamado, Interacao, StatusChamado } from '../types';
+import { withTimeout } from '../utils/promiseUtils';
 
 // Mapeamento snake_case → camelCase
 function mapChamado(row: Record<string, unknown>): Chamado {
@@ -33,12 +34,22 @@ function mapInteracao(row: Record<string, unknown>): Interacao {
 }
 
 export async function getTickets(): Promise<Chamado[]> {
-    const { data, error } = await supabase
-        .from('chamados')
-        .select('*')
-        .order('data_abertura', { ascending: false });
-    if (error) throw error;
-    return (data ?? []).map(mapChamado);
+    try {
+        const { data, error } = await withTimeout(
+            Promise.resolve(supabase
+                .from('chamados')
+                .select('*')
+                .order('data_abertura', { ascending: false })),
+            15000,
+            'Erro ao carregar chamados: tempo limite excedido.'
+        ) as { data: any[] | null; error: any };
+        
+        if (error) throw error;
+        return (data ?? []).map(mapChamado);
+    } catch (error) {
+        console.error('[TicketService] Erro no getTickets:', error);
+        throw error;
+    }
 }
 
 export async function getTicketById(id: string): Promise<Chamado | undefined> {
@@ -114,18 +125,28 @@ export async function assignTechnician(id: string, tecnicoId: string): Promise<C
 }
 
 export async function closeTicket(id: string, solucao: string): Promise<Chamado | undefined> {
-    const { data, error } = await supabase
-        .from('chamados')
-        .update({
-            status: 'fechado',
-            solucao_final: solucao,
-            data_fechamento: new Date().toISOString(),
-        })
-        .eq('id', id)
-        .select()
-        .maybeSingle();
-    if (error) throw error;
-    return data ? mapChamado(data) : undefined;
+    try {
+        const { data, error } = await withTimeout(
+            Promise.resolve(supabase
+                .from('chamados')
+                .update({
+                    status: 'fechado',
+                    solucao_final: solucao,
+                    data_fechamento: new Date().toISOString(),
+                })
+                .eq('id', id)
+                .select()
+                .maybeSingle()),
+            10000,
+            'Erro ao encerrar chamado: tempo limite excedido. Tente novamente.'
+        ) as { data: any; error: any };
+
+        if (error) throw error;
+        return data ? mapChamado(data) : undefined;
+    } catch (error) {
+        console.error('[TicketService] Erro no closeTicket:', error);
+        throw error;
+    }
 }
 
 export async function getInteracoes(chamadoId: string): Promise<Interacao[]> {

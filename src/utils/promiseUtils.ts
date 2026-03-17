@@ -20,8 +20,11 @@ export async function withTimeout<T>(
         const result = await Promise.race([promise, timeoutPromise]);
         clearTimeout(timeoutId!);
         return result;
-    } catch (error) {
+    } catch (error: any) {
         clearTimeout(timeoutId!);
+        if (error.message === errorMessage) {
+            error.isTimeout = true;
+        }
         throw error;
     }
 }
