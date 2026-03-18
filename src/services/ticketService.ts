@@ -1,6 +1,6 @@
 import { supabase } from '../lib/supabaseClient';
 import type { Chamado, Interacao, StatusChamado } from '../types';
-import { withTimeout } from '../utils/promiseUtils';
+import { withTimeout, withRetry } from '../utils/promiseUtils';
 
 // Mapeamento snake_case → camelCase
 function mapChamado(row: Record<string, unknown>): Chamado {
@@ -35,19 +35,24 @@ function mapInteracao(row: Record<string, unknown>): Interacao {
 
 export async function getTickets(): Promise<Chamado[]> {
     try {
-        const { data, error } = await withTimeout(
-            Promise.resolve(supabase
-                .from('chamados')
-                .select('*')
-                .order('data_abertura', { ascending: false })),
-            15000,
-            'Erro ao carregar chamados: tempo limite excedido.'
+        const { data, error } = await withRetry(
+            () => withTimeout(
+                Promise.resolve(supabase
+                    .from('chamados')
+                    .select('*')
+                    .order('data_abertura', { ascending: false })),
+                20000,
+                'Erro ao carregar chamados: tempo limite excedido.'
+            ),
+            2, // 2 retentativas extras (total 3 tentativas)
+            1000,
+            (error, attempt) => console.warn(`[TicketService] Tentativa ${attempt} de getTickets falhou:`, error.message)
         ) as { data: any[] | null; error: any };
         
         if (error) throw error;
         return (data ?? []).map(mapChamado);
     } catch (error) {
-        console.error('[TicketService] Erro no getTickets:', error);
+        console.error('[TicketService] Todas as tentativas de getTickets falharam:', error);
         throw error;
     }
 }

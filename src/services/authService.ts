@@ -1,6 +1,6 @@
 import { supabase } from '../lib/supabaseClient';
 import type { Session, User, AuthChangeEvent } from '@supabase/supabase-js';
-import { withTimeout } from '../utils/promiseUtils';
+import { withTimeout, withRetry } from '../utils/promiseUtils';
 
 export async function signIn(email: string, password: string) {
     const { data, error } = await supabase.auth.signInWithPassword({ email, password });
@@ -41,26 +41,34 @@ export async function getCurrentSession(): Promise<Session | null | undefined> {
     console.log('[AuthService] Chamando getSession()...');
     
     try {
-        // Usando withTimeout para ter um erro padronizado e limpo
-        const session = await withTimeout(
-            supabase.auth.getSession().then(({ data: { session } }) => session),
-            8000,
-            'Timeout ao obter sessão do Supabase'
+        // Aumentamos o timeout para 20s e adicionamos 3 retentativas
+        // Isso ajuda quando o navegador está saindo de um estado de throttling
+        const session = await withRetry(
+            () => withTimeout(
+                supabase.auth.getSession().then(({ data: { session } }) => session),
+                20000,
+                'Timeout ao obter sessão do Supabase'
+            ),
+            3,
+            2000,
+            (error, attempt) => console.warn(`[AuthService] Tentativa ${attempt} de getSession falhou:`, error.message)
         );
+        
         console.log('[AuthService] getSession() retornou com sucesso:', session ? 'Sessão ativa' : 'Sem sessão');
         return session;
     } catch (error: any) {
-        console.error('[AuthService] Erro ou timeout no getSession:', error);
-        // Retornamos undefined apenas em caso de erro técnico real ou timeout
+        console.error('[AuthService] Todas as tentativas de getSession falharam:', error);
+        // Retornamos undefined apenas em caso de erro técnico real ou timeout após retentativas
         return undefined;
     }
 }
 
 export async function getCurrentUser(): Promise<User | null> {
     try {
+        // Aumentamos o timeout para 20s também
         return await withTimeout(
             supabase.auth.getUser().then(({ data: { user } }) => user),
-            8000,
+            20000,
             'Timeout ao obter usuário do Supabase'
         );
     } catch (error) {

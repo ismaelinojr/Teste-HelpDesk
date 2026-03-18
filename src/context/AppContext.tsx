@@ -106,13 +106,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             const pContatos = clientService.getAllContatos();
             const pInteracoes = ticketService.getAllInteracoes();
 
-            // Envolvemos o Promise.all com um timeout global para o carregamento
+            // Envolvemos o Promise.all com um timeout global aumentado para 45s
             const [chamados, usuarios, clientes, categorias, statuses, slas, contatos, allInteracoes] = await withTimeout(
                 Promise.all([
                     pChamados, pUsuarios, pClientes, pCategorias, pStatuses, pSlas, pContatos, pInteracoes
                 ]),
-                30000,
-                'Tempo limite excedido ao carregar dados do sistema. Verifique sua conexão.'
+                45000,
+                'Tempo limite excedido ao carregar dados do sistema. Verifique sua conexão e tente novamente.'
             );
 
             setState(prev => ({
@@ -572,9 +572,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         const handleFocus = async () => {
             if (state.isAuthenticated && !isChecking) {
                 isChecking = true;
-                console.log('[AppContext] Aba focada, verificando sessão e dados...');
+                console.log('[AppContext] Aba focada, verificando sessão e dados em breve...');
                 
                 try {
+                    // Adicionamos um pequeno delay de 500ms para permitir que o navegador 
+                    // "acorde" totalmente antes de disparar requisições de rede
+                    await new Promise(resolve => setTimeout(resolve, 500));
+
                     const session = await authService.getCurrentSession();
                     
                     if (session === null) {
@@ -582,11 +586,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
                         console.warn('[AppContext] Sessão expirada confirmada ao focar, realizando logout...');
                         logout();
                     } else if (session === undefined) {
-                        // Se houve falha técnica/timeout
-                        console.warn('[AppContext] Não foi possível validar a sessão no foco (timeout/rede).');
-                        showNotification('Instabilidade de conexão detectada ao retomar o foco.', 'warning');
+                        // Se houve falha técnica/timeout após todas as retentativas do AuthService
+                        console.warn('[AppContext] Não foi possível validar a sessão no foco (timeout persistente).');
+                        // Não forçamos logout por timeout, apenas avisamos ou ignoramos para tentar depois
+                        // showNotification('Instabilidade de conexão detectada ao retomar o foco.', 'warning');
                     } else {
                         // Sessão válida, recarrega dados para garantir frescor
+                        console.log('[AppContext] Sessão validada com sucesso, recarregando dados...');
                         await loadData();
                     }
                 } catch (err) {

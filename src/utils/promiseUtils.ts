@@ -28,3 +28,31 @@ export async function withTimeout<T>(
         throw error;
     }
 }
+
+/**
+ * Tenta executar uma função assíncrona múltiplas vezes em caso de erro.
+ */
+export async function withRetry<T>(
+    fn: () => Promise<T>,
+    retries: number = 3,
+    delayMs: number = 1000,
+    onRetry?: (error: any, attempt: number) => void
+): Promise<T> {
+    let lastError: any;
+
+    for (let attempt = 1; attempt <= retries; attempt++) {
+        try {
+            return await fn();
+        } catch (error) {
+            lastError = error;
+            if (onRetry) onRetry(error, attempt);
+            
+            if (attempt < retries) {
+                // Espera antes da próxima tentativa
+                await new Promise(resolve => setTimeout(resolve, delayMs * attempt)); // Exponential backoff simples
+            }
+        }
+    }
+
+    throw lastError;
+}
