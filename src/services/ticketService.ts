@@ -1,6 +1,6 @@
 import { supabase } from '../lib/supabaseClient';
 import type { Chamado, Interacao, StatusChamado } from '../types';
-import { withTimeout, withRetry } from '../utils/promiseUtils';
+import { execQuery, execMutation } from '../utils/supabaseUtils';
 
 // Mapeamento snake_case → camelCase
 function mapChamado(row: Record<string, unknown>): Chamado {
@@ -35,45 +35,48 @@ function mapInteracao(row: Record<string, unknown>): Interacao {
 
 export async function getTickets(): Promise<Chamado[]> {
     try {
-        const { data, error } = await withRetry(
-            () => withTimeout(
-                Promise.resolve(supabase
+        const data = await execQuery(
+            async () => {
+                const { data, error } = await supabase
                     .from('chamados')
                     .select('*')
-                    .order('data_abertura', { ascending: false })),
-                20000,
-                'Erro ao carregar chamados: tempo limite excedido.'
-            ),
-            2, // 2 retentativas extras (total 3 tentativas)
-            1000,
-            (error, attempt) => console.warn(`[TicketService] Tentativa ${attempt} de getTickets falhou:`, error.message)
-        ) as { data: any[] | null; error: any };
+                    .order('data_abertura', { ascending: false });
+                if (error) throw error;
+                return data;
+            },
+            'Erro ao carregar chamados: verifique sua rede.'
+        );
         
-        if (error) throw error;
         return (data ?? []).map(mapChamado);
     } catch (error) {
-        console.error('[TicketService] Todas as tentativas de getTickets falharam:', error);
+        console.error('[TicketService] Erro ao buscar chamados:', error);
         throw error;
     }
 }
 
 export async function getTicketById(id: string): Promise<Chamado | undefined> {
-    const { data, error } = await supabase
-        .from('chamados')
-        .select('*')
-        .eq('id', id)
-        .maybeSingle();
-    if (error) throw error;
+    const data = await execQuery(async () => {
+        const { data, error } = await supabase
+            .from('chamados')
+            .select('*')
+            .eq('id', id)
+            .maybeSingle();
+        if (error) throw error;
+        return data;
+    });
     return data ? mapChamado(data) : undefined;
 }
 
 export async function getTicketsByTecnico(tecnicoId: string): Promise<Chamado[]> {
-    const { data, error } = await supabase
-        .from('chamados')
-        .select('*')
-        .eq('tecnico_id', tecnicoId)
-        .order('data_abertura', { ascending: false });
-    if (error) throw error;
+    const data = await execQuery(async () => {
+        const { data, error } = await supabase
+            .from('chamados')
+            .select('*')
+            .eq('tecnico_id', tecnicoId)
+            .order('data_abertura', { ascending: false });
+        if (error) throw error;
+        return data;
+    });
     return (data ?? []).map(mapChamado);
 }
 
@@ -98,13 +101,17 @@ export async function updateTicketStatus(id: string, status: StatusChamado): Pro
         updates.sla_horas = 72;
     }
 
-    const { data, error } = await supabase
-        .from('chamados')
-        .update(updates)
-        .eq('id', id)
-        .select()
-        .maybeSingle();
-    if (error) throw error;
+    const data = await execMutation(async () => {
+        const { data, error } = await supabase
+            .from('chamados')
+            .update(updates)
+            .eq('id', id)
+            .select()
+            .maybeSingle();
+        if (error) throw error;
+        return data;
+    }, 'Erro ao atualizar status do chamado.');
+
     return data ? mapChamado(data) : undefined;
 }
 
@@ -119,20 +126,24 @@ export async function assignTechnician(id: string, tecnicoId: string): Promise<C
         updates.data_inicio = new Date().toISOString();
     }
 
-    const { data, error } = await supabase
-        .from('chamados')
-        .update(updates)
-        .eq('id', id)
-        .select()
-        .maybeSingle();
-    if (error) throw error;
+    const data = await execMutation(async () => {
+        const { data, error } = await supabase
+            .from('chamados')
+            .update(updates)
+            .eq('id', id)
+            .select()
+            .maybeSingle();
+        if (error) throw error;
+        return data;
+    }, 'Erro ao assumir o chamado.');
+
     return data ? mapChamado(data) : undefined;
 }
 
 export async function closeTicket(id: string, solucao: string): Promise<Chamado | undefined> {
     try {
-        const { data, error } = await withTimeout(
-            Promise.resolve(supabase
+        const data = await execMutation(async () => {
+            const { data, error } = await supabase
                 .from('chamados')
                 .update({
                     status: 'fechado',
@@ -141,12 +152,11 @@ export async function closeTicket(id: string, solucao: string): Promise<Chamado 
                 })
                 .eq('id', id)
                 .select()
-                .maybeSingle()),
-            10000,
-            'Erro ao encerrar chamado: tempo limite excedido. Tente novamente.'
-        ) as { data: any; error: any };
+                .maybeSingle();
+            if (error) throw error;
+            return data;
+        }, 'Erro ao encerrar chamado: tempo limite excedido. Tente novamente.');
 
-        if (error) throw error;
         return data ? mapChamado(data) : undefined;
     } catch (error) {
         console.error('[TicketService] Erro no closeTicket:', error);
@@ -155,55 +165,67 @@ export async function closeTicket(id: string, solucao: string): Promise<Chamado 
 }
 
 export async function getInteracoes(chamadoId: string): Promise<Interacao[]> {
-    const { data, error } = await supabase
-        .from('interacoes')
-        .select('*')
-        .eq('chamado_id', chamadoId)
-        .order('created_at', { ascending: true });
-    if (error) throw error;
+    const data = await execQuery(async () => {
+        const { data, error } = await supabase
+            .from('interacoes')
+            .select('*')
+            .eq('chamado_id', chamadoId)
+            .order('created_at', { ascending: true });
+        if (error) throw error;
+        return data;
+    });
     return (data ?? []).map(mapInteracao);
 }
 
 export async function getAllInteracoes(): Promise<Interacao[]> {
-    const { data, error } = await supabase
-        .from('interacoes')
-        .select('*')
-        .order('created_at', { ascending: true });
-    if (error) throw error;
+    const data = await execQuery(async () => {
+        const { data, error } = await supabase
+            .from('interacoes')
+            .select('*')
+            .order('created_at', { ascending: true });
+        if (error) throw error;
+        return data;
+    });
     return (data ?? []).map(mapInteracao);
 }
 
 export async function addInteracao(chamadoId: string, usuarioId: string, mensagem: string): Promise<Interacao> {
-    const { data, error } = await supabase
-        .from('interacoes')
-        .insert({
-            chamado_id: chamadoId,
-            usuario_id: usuarioId,
-            mensagem,
-        })
-        .select()
-        .single();
-    if (error) throw error;
+    const data = await execMutation(async () => {
+        const { data, error } = await supabase
+            .from('interacoes')
+            .insert({
+                chamado_id: chamadoId,
+                usuario_id: usuarioId,
+                mensagem,
+            })
+            .select()
+            .single();
+        if (error) throw error;
+        return data;
+    }, 'Erro ao adicionar nota ao chamado.');
     return mapInteracao(data);
 }
 
 export async function createTicket(ticketData: Omit<Chamado, 'id' | 'numero' | 'dataAbertura' | 'dataInicio' | 'dataFechamento' | 'solucaoFinal'>): Promise<Chamado> {
-    const { data, error } = await supabase
-        .from('chamados')
-        .insert({
-            cliente_id: ticketData.clienteId,
-            contato_nome: ticketData.contatoNome,
-            categoria_id: ticketData.categoriaId,
-            titulo: ticketData.titulo,
-            descricao: ticketData.descricao,
-            status: ticketData.status,
-            prioridade: ticketData.prioridade,
-            tecnico_id: ticketData.tecnicoId,
-            sla_horas: ticketData.slaHoras,
-        })
-        .select()
-        .single();
-    if (error) throw error;
+    const data = await execMutation(async () => {
+        const { data, error } = await supabase
+            .from('chamados')
+            .insert({
+                cliente_id: ticketData.clienteId,
+                contato_nome: ticketData.contatoNome,
+                categoria_id: ticketData.categoriaId,
+                titulo: ticketData.titulo,
+                descricao: ticketData.descricao,
+                status: ticketData.status,
+                prioridade: ticketData.prioridade,
+                tecnico_id: ticketData.tecnicoId,
+                sla_horas: ticketData.slaHoras,
+            })
+            .select()
+            .single();
+        if (error) throw error;
+        return data;
+    }, 'Erro ao criar novo chamado.');
     return mapChamado(data);
 }
 

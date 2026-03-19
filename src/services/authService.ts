@@ -1,6 +1,7 @@
 import { supabase } from '../lib/supabaseClient';
 import type { Session, User, AuthChangeEvent } from '@supabase/supabase-js';
-import { withTimeout, withRetry } from '../utils/promiseUtils';
+import { withTimeout } from '../utils/promiseUtils';
+import { execResilient } from '../utils/supabaseUtils';
 
 export async function signIn(email: string, password: string) {
     const { data, error } = await supabase.auth.signInWithPassword({ email, password });
@@ -41,24 +42,25 @@ export async function getCurrentSession(): Promise<Session | null | undefined> {
     console.log('[AuthService] Chamando getSession()...');
     
     try {
-        // Aumentamos o timeout para 20s e adicionamos 3 retentativas
-        // Isso ajuda quando o navegador está saindo de um estado de throttling
-        const session = await withRetry(
-            () => withTimeout(
-                supabase.auth.getSession().then(({ data: { session } }) => session),
-                20000,
-                'Timeout ao obter sessão do Supabase'
-            ),
-            3,
-            2000,
-            (error, attempt) => console.warn(`[AuthService] Tentativa ${attempt} de getSession falhou:`, error.message)
+        // Usamos execResilient com 10s de timeout e 3 tentativas
+        const session = await execResilient(
+            async () => {
+                const { data: { session }, error } = await supabase.auth.getSession();
+                if (error) throw error;
+                return session;
+            },
+            {
+                timeoutMs: 10000,
+                retries: 3,
+                errorMessage: 'Timeout ao obter sessão do Supabase',
+                onRetry: (error, attempt) => console.warn(`[AuthService] Tentativa ${attempt} de getSession falhou:`, error.message)
+            }
         );
         
         console.log('[AuthService] getSession() retornou com sucesso:', session ? 'Sessão ativa' : 'Sem sessão');
         return session;
     } catch (error: any) {
         console.error('[AuthService] Todas as tentativas de getSession falharam:', error);
-        // Retornamos undefined apenas em caso de erro técnico real ou timeout após retentativas
         return undefined;
     }
 }

@@ -10,6 +10,9 @@ import {
     Plus,
     BarChart3,
     LogOut,
+    Wifi,
+    WifiOff,
+    AlertCircle,
 } from 'lucide-react';
 
 const navItems = [
@@ -30,7 +33,7 @@ function getPageTitle(pathname: string): string {
 
 export default function Layout() {
     const [sidebarOpen, setSidebarOpen] = useState(false);
-    const { currentUser, logout } = useApp();
+    const { currentUser, logout, isOnline, isConnectionStable } = useApp();
     const location = useLocation();
 
     if (!currentUser) return null;
@@ -114,7 +117,24 @@ export default function Layout() {
                     </button>
                     <h1 className="page-title">{getPageTitle(location.pathname)}</h1>
                 </div>
-
+                <div className="header-right">
+                    {!isOnline ? (
+                        <div className="connection-badge offline">
+                            <WifiOff size={14} />
+                            <span>Offline</span>
+                        </div>
+                    ) : !isConnectionStable ? (
+                        <div className="connection-badge unstable">
+                            <AlertCircle size={14} />
+                            <span>Conexão Instável</span>
+                        </div>
+                    ) : (
+                        <div className="connection-badge online">
+                            <Wifi size={14} />
+                            <span>Conectado</span>
+                        </div>
+                    )}
+                </div>
             </header>
 
             {/* Content */}
@@ -186,6 +206,41 @@ export default function Layout() {
                 .btn-logout-footer:hover {
                     color: #f38ba8;
                     background: rgba(243, 139, 168, 0.1);
+                }
+
+                .header {
+                    display: flex;
+                    align-items: center;
+                    justify-content: space-between;
+                    padding-right: 20px;
+                }
+                .connection-badge {
+                    display: flex;
+                    align-items: center;
+                    gap: 6px;
+                    padding: 4px 10px;
+                    border-radius: 20px;
+                    font-size: 11px;
+                    font-weight: 600;
+                    transition: all 0.3s ease;
+                }
+                .connection-badge.online {
+                    background: rgba(166, 227, 161, 0.1);
+                    color: #a6e3a1;
+                }
+                .connection-badge.offline {
+                    background: rgba(243, 139, 168, 0.1);
+                    color: #f38ba8;
+                    animation: pulse 2s infinite;
+                }
+                .connection-badge.unstable {
+                    background: rgba(250, 179, 135, 0.1);
+                    color: #fab387;
+                }
+                @keyframes pulse {
+                    0% { opacity: 1; }
+                    50% { opacity: 0.6; }
+                    100% { opacity: 1; }
                 }
             `}</style>
         </div>

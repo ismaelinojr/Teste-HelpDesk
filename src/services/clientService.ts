@@ -1,5 +1,6 @@
 import { supabase } from '../lib/supabaseClient';
 import type { Cliente, ContatoCliente } from '../types';
+import { execQuery, execMutation } from '../utils/supabaseUtils';
 
 // Mapeamento snake_case → camelCase
 function mapCliente(row: Record<string, unknown>): Cliente {
@@ -27,11 +28,14 @@ function mapContato(row: Record<string, unknown>): ContatoCliente {
 
 // ===== CLIENTES =====
 export async function getClients(): Promise<Cliente[]> {
-    const { data, error } = await supabase
-        .from('clientes')
-        .select('*')
-        .eq('ativo', true);
-    if (error) throw error;
+    const data = await execQuery(async () => {
+        const { data, error } = await supabase
+            .from('clientes')
+            .select('*')
+            .eq('ativo', true);
+        if (error) throw error;
+        return data;
+    });
     return (data ?? []).map(mapCliente);
 }
 
@@ -47,18 +51,21 @@ export async function getClientById(id: string): Promise<Cliente | undefined> {
 }
 
 export async function addCliente(cliente: Omit<Cliente, 'id'>): Promise<Cliente> {
-    const { data, error } = await supabase
-        .from('clientes')
-        .insert({ 
-            nome: cliente.nome, 
-            contato: cliente.contato, 
-            endereco: cliente.endereco, 
-            regiao: cliente.regiao, 
-            ativo: true 
-        })
-        .select()
-        .single();
-    if (error) throw error;
+    const data = await execMutation(async () => {
+        const { data, error } = await supabase
+            .from('clientes')
+            .insert({ 
+                nome: cliente.nome, 
+                contato: cliente.contato, 
+                endereco: cliente.endereco, 
+                regiao: cliente.regiao, 
+                ativo: true 
+            })
+            .select()
+            .single();
+        if (error) throw error;
+        return data;
+    }, 'Erro ao cadastrar laboratório.');
     return mapCliente(data);
 }
 
@@ -70,13 +77,16 @@ export async function updateCliente(id: string, updates: Partial<Cliente>): Prom
     if (updates.regiao !== undefined) dbUpdates.regiao = updates.regiao;
     if (updates.ativo !== undefined) dbUpdates.ativo = updates.ativo;
 
-    const { data, error } = await supabase
-        .from('clientes')
-        .update(dbUpdates)
-        .eq('id', id)
-        .select()
-        .single();
-    if (error) throw error;
+    const data = await execMutation(async () => {
+        const { data, error } = await supabase
+            .from('clientes')
+            .update(dbUpdates)
+            .eq('id', id)
+            .select()
+            .single();
+        if (error) throw error;
+        return data;
+    }, 'Erro ao atualizar laboratório.');
     return mapCliente(data);
 }
 

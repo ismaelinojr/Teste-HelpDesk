@@ -1,5 +1,6 @@
 import { supabase } from '../lib/supabaseClient';
 import type { Usuario } from '../types';
+import { execQuery, execMutation } from '../utils/supabaseUtils';
 
 // Mapeia snake_case do banco para camelCase do frontend
 function mapUsuario(row: Record<string, unknown>): Usuario {
@@ -14,33 +15,41 @@ function mapUsuario(row: Record<string, unknown>): Usuario {
 }
 
 export async function getUsers(): Promise<Usuario[]> {
-    const { data, error } = await supabase
-        .from('usuarios')
-        .select('id, auth_id, nome, role, email, ativo');
-    // .eq('ativo', true); // Removido para ver inativos no painel admin se necessário, ou filtrar no frontend
-    if (error) throw error;
+    const data = await execQuery(async () => {
+        const { data, error } = await supabase
+            .from('usuarios')
+            .select('id, auth_id, nome, role, email, ativo');
+        if (error) throw error;
+        return data;
+    });
     return (data ?? []).map(mapUsuario);
 }
 
 export async function getUserById(id: string): Promise<Usuario | undefined> {
-    const { data, error } = await supabase
-        .from('usuarios')
-        .select('id, nome, role, email, ativo')
-        .eq('id', id)
-        .eq('ativo', true)
-        .maybeSingle();
-    if (error) throw error;
+    const data = await execQuery(async () => {
+        const { data, error } = await supabase
+            .from('usuarios')
+            .select('id, nome, role, email, ativo')
+            .eq('id', id)
+            .eq('ativo', true)
+            .maybeSingle();
+        if (error) throw error;
+        return data;
+    });
     return data ? mapUsuario(data) : undefined;
 }
 
 export async function getUserByAuthId(authId: string): Promise<Usuario | undefined> {
-    const { data, error } = await supabase
-        .from('usuarios')
-        .select('id, nome, role, email, ativo')
-        .eq('auth_id', authId)
-        .eq('ativo', true)
-        .maybeSingle();
-    if (error) throw error;
+    const data = await execQuery(async () => {
+        const { data, error } = await supabase
+            .from('usuarios')
+            .select('id, nome, role, email, ativo')
+            .eq('auth_id', authId)
+            .eq('ativo', true)
+            .maybeSingle();
+        if (error) throw error;
+        return data;
+    });
     return data ? mapUsuario(data) : undefined;
 }
 
@@ -55,23 +64,29 @@ export async function getTechnicians(): Promise<Usuario[]> {
 }
 
 export async function addUsuario(usuario: Omit<Usuario, 'id'>): Promise<Usuario> {
-    const { data, error } = await supabase
-        .from('usuarios')
-        .insert({ ...usuario, ativo: true })
-        .select()
-        .single();
-    if (error) throw error;
+    const data = await execMutation(async () => {
+        const { data, error } = await supabase
+            .from('usuarios')
+            .insert({ ...usuario, ativo: true })
+            .select()
+            .single();
+        if (error) throw error;
+        return data;
+    }, 'Erro ao cadastrar usuário.');
     return mapUsuario(data);
 }
 
 export async function updateUsuario(id: string, updates: Partial<Usuario>): Promise<Usuario> {
-    const { data, error } = await supabase
-        .from('usuarios')
-        .update(updates)
-        .eq('id', id)
-        .select()
-        .single();
-    if (error) throw error;
+    const data = await execMutation(async () => {
+        const { data, error } = await supabase
+            .from('usuarios')
+            .update(updates)
+            .eq('id', id)
+            .select()
+            .single();
+        if (error) throw error;
+        return data;
+    }, 'Erro ao atualizar dados do usuário.');
     return mapUsuario(data);
 }
 

@@ -22,6 +22,8 @@ interface AppState {
     currentUser: Usuario | null;
     isAuthenticated: boolean;
     loading: boolean;
+    isOnline: boolean;
+    isConnectionStable: boolean;
 }
 
 interface AppContextType extends AppState {
@@ -92,6 +94,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         currentUser: null,
         isAuthenticated: false,
         loading: true,
+        isOnline: navigator.onLine,
+        isConnectionStable: true,
     });
 
     // Carrega todos os dados do Supabase
@@ -553,46 +557,82 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         }));
     }, []);
 
+    // Monitoramento de conexão Online/Offline
+    useEffect(() => {
+        const handleOnline = () => {
+            console.log('[AppContext] Conexão restabelecida.');
+            setState(prev => ({ ...prev, isOnline: true }));
+            showNotification('Conexão restabelecida. Sincronizando dados...', 'success');
+            loadData();
+        };
+        const handleOffline = () => {
+            console.warn('[AppContext] Conexão perdida.');
+            setState(prev => ({ ...prev, isOnline: false }));
+            showNotification('Você está offline. Algumas funções podem não estar disponíveis.', 'warning');
+        };
+
+        window.addEventListener('online', handleOnline);
+        window.addEventListener('offline', handleOffline);
+        
+        return () => {
+            window.removeEventListener('online', handleOnline);
+            window.removeEventListener('offline', handleOffline);
+        };
+    }, [loadData, showNotification]);
+
     // Auto-refresh: Recarregar dados automaticamente a cada 5 minutos (para monitoramento)
     useEffect(() => {
         const interval = setInterval(() => {
-            if (state.isAuthenticated && !state.loading) {
+            if (state.isAuthenticated && !state.loading && state.isOnline) {
                 console.log('[AppContext] Auto-refresh de dados acionado...');
                 loadData();
             }
         }, 5 * 60 * 1000); // 5 minutos
         
         return () => clearInterval(interval);
-    }, [state.isAuthenticated, state.loading, loadData]);
+    }, [state.isAuthenticated, state.loading, state.isOnline, loadData]);
 
     // Verificação ao retomar foco: Garante que o sistema volte a vida ao trocar de aba/monitor
     useEffect(() => {
         let isChecking = false;
+        let lastFocusTime = Date.now();
 
         const handleFocus = async () => {
+            const now = Date.now();
+            const inactiveMinutes = (now - lastFocusTime) / (1000 * 60);
+            lastFocusTime = now;
+
             if (state.isAuthenticated && !isChecking) {
                 isChecking = true;
-                console.log('[AppContext] Aba focada, verificando sessão e dados em breve...');
+                console.log(`[AppContext] Aba focada (após ${inactiveMinutes.toFixed(1)} min de inatividade), verificando sessão...`);
                 
                 try {
-                    // Adicionamos um pequeno delay de 500ms para permitir que o navegador 
-                    // "acorde" totalmente antes de disparar requisições de rede
-                    await new Promise(resolve => setTimeout(resolve, 500));
+                    // Se ficou inativo por muito tempo (> 30 min), forçar um reset mais agressivo
+                    const isLongInactivity = inactiveMinutes > 30;
+                    
+                    if (isLongInactivity) {
+                        console.log('[AppContext] Inatividade longa detectada, realizando refresh completo da sessão...');
+                    }
+
+                    await new Promise(resolve => setTimeout(resolve, 800));
 
                     const session = await authService.getCurrentSession();
                     
                     if (session === null) {
-                        // Se a sessão expirou totalmente (confirmado pelo Supabase)
-                        console.warn('[AppContext] Sessão expirada confirmada ao focar, realizando logout...');
+                        console.warn('[AppContext] Sessão expirada ao focar, realizando logout...');
                         logout();
                     } else if (session === undefined) {
-                        // Se houve falha técnica/timeout após todas as retentativas do AuthService
-                        console.warn('[AppContext] Não foi possível validar a sessão no foco (timeout persistente).');
-                        // Não forçamos logout por timeout, apenas avisamos ou ignoramos para tentar depois
-                        // showNotification('Instabilidade de conexão detectada ao retomar o foco.', 'warning');
+                        console.warn('[AppContext] Falha persistente na conexão ao focar.');
+                        setState(prev => ({ ...prev, isConnectionStable: false }));
+                        
+                        // Se inatividade foi longa E falhou permanentemente, podemos sugerir reload
+                        if (isLongInactivity) {
+                            showNotification('A conexão com o servidor foi interrompida. Recarregando a página para garantir estabilidade...', 'warning');
+                            setTimeout(() => window.location.reload(), 3000);
+                        }
                     } else {
-                        // Sessão válida, recarrega dados para garantir frescor
-                        console.log('[AppContext] Sessão validada com sucesso, recarregando dados...');
+                        console.log('[AppContext] Sessão validada com sucesso.');
+                        setState(prev => ({ ...prev, isConnectionStable: true }));
                         await loadData();
                     }
                 } catch (err) {
@@ -605,7 +645,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
         window.addEventListener('focus', handleFocus);
         return () => window.removeEventListener('focus', handleFocus);
-    }, [state.isAuthenticated, loadData, logout, showNotification]);
+    }, [state.isAuthenticated, state.isOnline, loadData, logout, showNotification]);
 
     return (
         <AppContext.Provider value={{
