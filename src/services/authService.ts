@@ -60,8 +60,29 @@ export async function getCurrentSession(): Promise<Session | null | undefined> {
         console.log('[AuthService] getSession() retornou com sucesso:', session ? 'Sessão ativa' : 'Sem sessão');
         return session;
     } catch (error: any) {
-        console.error('[AuthService] Todas as tentativas de getSession falharam:', error);
-        return undefined;
+        console.warn('[AuthService] Todas as tentativas de getSession falharam. Tentando fallback para getUser()...', error);
+        
+        try {
+            // Fallback: getUser() força uma chamada de rede e pode "acordar" a conexão melhor que getSession
+            const { data: { user }, error: userError } = await withTimeout(
+                supabase.auth.getUser(),
+                15000,
+                'Timeout no fallback getUser'
+            );
+            
+            if (userError) throw userError;
+            
+            if (user) {
+                console.log('[AuthService] Fallback getUser() funcionou. Tentando obter sessão novamente...');
+                const { data: { session } } = await supabase.auth.getSession();
+                return session;
+            }
+            
+            return null;
+        } catch (fallbackError) {
+            console.error('[AuthService] Fallback para getUser() também falhou:', fallbackError);
+            return undefined;
+        }
     }
 }
 

@@ -34,7 +34,7 @@ function getPageTitle(pathname: string): string {
 
 export default function Layout() {
     const [sidebarOpen, setSidebarOpen] = useState(false);
-    const { currentUser, logout, isOnline, isConnectionStable } = useApp();
+    const { currentUser, logout, isOnline, isConnectionStable, reconnect } = useApp();
     const location = useLocation();
 
     if (!currentUser) return null;
@@ -126,12 +126,23 @@ export default function Layout() {
                             <span>Offline</span>
                         </div>
                     ) : !isConnectionStable ? (
-                        <div className="connection-badge unstable">
+                        <button 
+                            className="connection-badge unstable clickable" 
+                            onClick={() => {
+                                console.log('[Layout] Clique no badge de instabilidade');
+                                reconnect();
+                            }}
+                            title="Clique para tentar reconectar agora"
+                        >
                             <AlertCircle size={14} />
                             <span>Conexão Instável</span>
-                        </div>
+                        </button>
                     ) : (
-                        <div className="connection-badge online">
+                        <div 
+                            className="connection-badge online clickable"
+                            onClick={() => reconnect()}
+                            title="Clique para atualizar dados"
+                        >
                             <Wifi size={14} />
                             <span>Conectado</span>
                         </div>
@@ -238,6 +249,19 @@ export default function Layout() {
                 .connection-badge.unstable {
                     background: rgba(250, 179, 135, 0.1);
                     color: #fab387;
+                }
+                .connection-badge.clickable {
+                    cursor: pointer;
+                    border: 1px solid transparent;
+                }
+                .connection-badge.clickable:hover {
+                    background: rgba(255, 255, 255, 0.1);
+                    border-color: rgba(255, 255, 255, 0.2);
+                    transform: translateY(-1px);
+                }
+                .connection-badge.unstable.clickable:hover {
+                    background: rgba(250, 179, 135, 0.2);
+                    border-color: rgba(250, 179, 135, 0.3);
                 }
                 @keyframes pulse {
                     0% { opacity: 1; }

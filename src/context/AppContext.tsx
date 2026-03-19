@@ -78,6 +78,7 @@ interface AppContextType extends AppState {
     addSLA: (sla: Omit<SLAConfig, 'id'>) => Promise<SLAConfig>;
     updateSLA: (id: string, data: Partial<SLAConfig>) => Promise<SLAConfig>;
     deleteSLA: (id: string) => Promise<void>;
+    reconnect: () => Promise<void>;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -246,6 +247,21 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         const chamados = await ticketService.getTickets();
         setState(prev => ({ ...prev, chamados }));
     }, []);
+
+    const reconnect = useCallback(async () => {
+        console.log('[AppContext] Forçando reconexão manual...');
+        setState(prev => ({ ...prev, loading: true, isConnectionStable: true }));
+        try {
+            await authService.getCurrentSession();
+            await loadData();
+            showNotification('Conexão restabelecida com sucesso.', 'success');
+        } catch (err) {
+            console.error('[AppContext] Falha na reconexão manual:', err);
+            showNotification('Não foi possível restabelecer a conexão. Tente novamente ou use Ctrl+F5.', 'error');
+        } finally {
+            setState(prev => ({ ...prev, loading: false }));
+        }
+    }, [loadData, showNotification]);
 
     const assumirChamado = useCallback(async (chamadoId: string) => {
         if (!state.currentUser) return;
@@ -624,19 +640,28 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
             if (state.isAuthenticated && !isChecking) {
                 isChecking = true;
-                console.log(`[AppContext] Aba focada (após ${inactiveMinutes.toFixed(1)} min de inatividade), verificando sessão...`);
+                
+                // Paciência: Dá um tempo maior (1.5s) para o SO e a rede "acordarem"
+                const delay = inactiveMinutes > 5 ? 1500 : 800;
+                console.log(`[AppContext] Aba focada (após ${inactiveMinutes.toFixed(1)} min de inatividade), aguardando ${delay}ms para verificar sessão...`);
                 
                 try {
-                    // Se ficou inativo por muito tempo (> 30 min), forçar um reset mais agressivo
                     const isLongInactivity = inactiveMinutes > 30;
                     
                     if (isLongInactivity) {
                         console.log('[AppContext] Inatividade longa detectada, realizando refresh completo da sessão...');
                     }
 
-                    await new Promise(resolve => setTimeout(resolve, 800));
+                    await new Promise(resolve => setTimeout(resolve, delay));
 
-                    const session = await authService.getCurrentSession();
+                    let session = await authService.getCurrentSession();
+                    
+                    // Se falhou (undefined), tentamos mais UMA vez após um delay extra
+                    if (session === undefined) {
+                        console.warn('[AppContext] Falha na primeira tentativa de verificação pós-foco. Tentando novamente em 2s...');
+                        await new Promise(resolve => setTimeout(resolve, 2000));
+                        session = await authService.getCurrentSession();
+                    }
                     
                     if (session === null) {
                         console.warn('[AppContext] Sessão expirada ao focar, realizando logout...');
@@ -645,18 +670,18 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
                         console.warn('[AppContext] Falha persistente na conexão ao focar.');
                         setState(prev => ({ ...prev, isConnectionStable: false }));
                         
-                        // Se inatividade foi longa E falhou permanentemente, podemos sugerir reload
                         if (isLongInactivity) {
                             showNotification('A conexão com o servidor foi interrompida. Recarregando a página para garantir estabilidade...', 'warning');
                             setTimeout(() => window.location.reload(), 3000);
-                        } else {
-                            // Mesmo se não for longa, se falhou consecutivamente, marca como instável
-                            setState(prev => ({ ...prev, isConnectionStable: false }));
                         }
                     } else {
                         console.log('[AppContext] Sessão validada com sucesso.');
                         setState(prev => ({ ...prev, isConnectionStable: true }));
-                        await loadData();
+                        
+                        // Se houve instabilidade prévia, recarrega os dados
+                        if (!state.isConnectionStable) {
+                            await loadData();
+                        }
                     }
                 } catch (err) {
                     console.error('[AppContext] Erro no handleFocus:', err);
@@ -668,7 +693,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
         window.addEventListener('focus', handleFocus);
         return () => window.removeEventListener('focus', handleFocus);
-    }, [state.isAuthenticated, state.isOnline, loadData, logout, showNotification]);
+    }, [state.isAuthenticated, state.isOnline, state.isConnectionStable, loadData, logout, showNotification]);
 
     return (
         <AppContext.Provider value={{
@@ -683,6 +708,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             getInteracoes,
             criarChamado,
             refreshChamados,
+            reconnect,
             getClienteNome,
             getTecnicoNome,
             getCategoriaNome,
