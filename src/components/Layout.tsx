@@ -14,6 +14,7 @@ import {
     WifiOff,
     AlertCircle,
 } from 'lucide-react';
+import { ConnectionRecovery } from './ConnectionRecovery';
 
 const navItems = [
     { to: '/', label: 'Dashboard', icon: LayoutDashboard },
@@ -40,6 +41,7 @@ export default function Layout() {
 
     return (
         <div className="app-layout">
+            <ConnectionRecovery />
             {/* Overlay mobile */}
             <div
                 className={`sidebar-overlay ${sidebarOpen ? 'open' : ''}`}

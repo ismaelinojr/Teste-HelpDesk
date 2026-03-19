@@ -9,6 +9,7 @@ import * as slaService from '../services/slaService';
 import * as authService from '../services/authService';
 import { useNotification } from './NotificationContext';
 import { withTimeout } from '../utils/promiseUtils';
+import { isSystemZombie } from '../utils/supabaseUtils';
 
 interface AppState {
     chamados: Chamado[];
@@ -24,6 +25,7 @@ interface AppState {
     loading: boolean;
     isOnline: boolean;
     isConnectionStable: boolean;
+    isZombie: boolean;
 }
 
 interface AppContextType extends AppState {
@@ -96,6 +98,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         loading: true,
         isOnline: navigator.onLine,
         isConnectionStable: true,
+        isZombie: false,
     });
 
     // Carrega todos os dados do Supabase
@@ -580,6 +583,23 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         };
     }, [loadData, showNotification]);
 
+    // Monitoramento de Estado Zumbi (Falhas consecutivas)
+    useEffect(() => {
+        const interval = setInterval(() => {
+            const zombieDetected = isSystemZombie();
+            if (zombieDetected !== state.isZombie) {
+                console.warn(`[AppContext] Mudança no estado Zumbi: ${zombieDetected}`);
+                setState(prev => ({ ...prev, isZombie: zombieDetected }));
+                
+                if (zombieDetected) {
+                    showNotification('Detectamos instabilidade persistente na conexão. Algumas funções podem estar suspensas.', 'error');
+                }
+            }
+        }, 3000); // Check a cada 3s
+        
+        return () => clearInterval(interval);
+    }, [state.isZombie, showNotification]);
+
     // Auto-refresh: Recarregar dados automaticamente a cada 5 minutos (para monitoramento)
     useEffect(() => {
         const interval = setInterval(() => {
@@ -629,6 +649,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
                         if (isLongInactivity) {
                             showNotification('A conexão com o servidor foi interrompida. Recarregando a página para garantir estabilidade...', 'warning');
                             setTimeout(() => window.location.reload(), 3000);
+                        } else {
+                            // Mesmo se não for longa, se falhou consecutivamente, marca como instável
+                            setState(prev => ({ ...prev, isConnectionStable: false }));
                         }
                     } else {
                         console.log('[AppContext] Sessão validada com sucesso.');

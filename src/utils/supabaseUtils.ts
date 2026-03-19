@@ -1,5 +1,24 @@
 import { withTimeout, withRetry } from './promiseUtils';
 
+// Monitor global de saúde da conexão
+let consecutiveFailures = 0;
+const FAILURE_THRESHOLD = 3;
+
+export function getConsecutiveFailures() {
+    return consecutiveFailures;
+}
+
+export function resetConsecutiveFailures() {
+    if (consecutiveFailures > 0) {
+        console.log('[SupabaseUtils] Conexão saudável: Reset de falhas consecutivas.');
+        consecutiveFailures = 0;
+    }
+}
+
+export function isSystemZombie() {
+    return consecutiveFailures >= FAILURE_THRESHOLD;
+}
+
 /**
  * Interface para opções de execução resiliente.
  */
@@ -28,12 +47,31 @@ export async function execResilient<T>(
         onRetry
     } = options;
 
-    return withRetry(
-        () => withTimeout(fn(), timeoutMs, errorMessage),
-        retries,
-        1000,
-        onRetry
-    );
+    try {
+        const result = await withRetry(
+            () => withTimeout(fn(), timeoutMs, errorMessage),
+            retries,
+            1000,
+            (error, attempt) => {
+                if (onRetry) onRetry(error, attempt);
+                // Se falhou por timeout ou erro de rede, incrementamos o monitor
+                if (error.isTimeout || !navigator.onLine) {
+                    consecutiveFailures++;
+                    console.warn(`[SupabaseUtils] Falha detectada (${consecutiveFailures}/${FAILURE_THRESHOLD}):`, error.message);
+                }
+            }
+        );
+        
+        // Sucesso! Resetamos o contador
+        resetConsecutiveFailures();
+        return result;
+    } catch (error: any) {
+        // Se após todos os retries ainda falhou, garantimos que o contador reflete isso
+        if (error.isTimeout || !navigator.onLine) {
+            // Já incrementado no onRetry, mas garante se houver algum erro de fluxo
+        }
+        throw error;
+    }
 }
 
 /**
