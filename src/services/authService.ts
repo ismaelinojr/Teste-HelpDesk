@@ -50,7 +50,7 @@ export async function getCurrentSession(): Promise<Session | null | undefined> {
                 return session;
             },
             {
-                timeoutMs: 10000,
+                timeoutMs: 15000, // Aumentado de 10s para 15s
                 retries: 3,
                 errorMessage: 'Timeout ao obter sessão do Supabase',
                 onRetry: (error, attempt) => console.warn(`[AuthService] Tentativa ${attempt} de getSession falhou:`, error.message)
@@ -88,10 +88,9 @@ export async function getCurrentSession(): Promise<Session | null | undefined> {
 
 export async function getCurrentUser(): Promise<User | null> {
     try {
-        // Aumentamos o timeout para 20s também
         return await withTimeout(
             supabase.auth.getUser().then(({ data: { user } }) => user),
-            20000,
+            30000, // Aumentado de 20s para 30s
             'Timeout ao obter usuário do Supabase'
         );
     } catch (error) {

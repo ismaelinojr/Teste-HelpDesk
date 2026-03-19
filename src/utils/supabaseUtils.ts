@@ -2,7 +2,7 @@ import { withTimeout, withRetry } from './promiseUtils';
 
 // Monitor global de saúde da conexão
 let consecutiveFailures = 0;
-const FAILURE_THRESHOLD = 3;
+const FAILURE_THRESHOLD = 5; // Aumentado de 3 para 5 para ser menos sensível
 
 export function getConsecutiveFailures() {
     return consecutiveFailures;
@@ -51,14 +51,11 @@ export async function execResilient<T>(
         const result = await withRetry(
             () => withTimeout(fn(), timeoutMs, errorMessage),
             retries,
-            1000,
+            1500, // Aumentado delay base para 1.5s
             (error, attempt) => {
                 if (onRetry) onRetry(error, attempt);
-                // Se falhou por timeout ou erro de rede, incrementamos o monitor
-                if (error.isTimeout || !navigator.onLine) {
-                    consecutiveFailures++;
-                    console.warn(`[SupabaseUtils] Falha detectada (${consecutiveFailures}/${FAILURE_THRESHOLD}):`, error.message);
-                }
+                // Log de aviso mas sem incrementar consecutiveFailures aqui para não ser hipersensível
+                console.warn(`[SupabaseUtils] Tentativa de conexão ${attempt}/${retries} falhou:`, error.message);
             }
         );
         
@@ -66,9 +63,10 @@ export async function execResilient<T>(
         resetConsecutiveFailures();
         return result;
     } catch (error: any) {
-        // Se após todos os retries ainda falhou, garantimos que o contador reflete isso
-        if (error.isTimeout || !navigator.onLine) {
-            // Já incrementado no onRetry, mas garante se houver algum erro de fluxo
+        // Se após todos os retries ainda falhou, agora sim incrementamos o contador global
+        if (error.isTimeout || !navigator.onLine || error.message?.includes('fetch')) {
+            consecutiveFailures++;
+            console.error(`[SupabaseUtils] Chamada falhou permanentemente (${consecutiveFailures}/${FAILURE_THRESHOLD}):`, error.message);
         }
         throw error;
     }
@@ -82,8 +80,8 @@ export async function execMutation<T>(
     errorMessage: string = 'Falha ao salvar dados. Verifique sua conexão.'
 ): Promise<T> {
     return execResilient(fn, {
-        timeoutMs: 20000,
-        retries: 1, // Menos retentativas para mutações para evitar duplicidade ou espera excessiva
+        timeoutMs: 35000, // Aumentado de 20s para 35s
+        retries: 2, // Aumentado de 1 para 2 retries para mutações
         errorMessage
     });
 }
@@ -96,7 +94,7 @@ export async function execQuery<T>(
     errorMessage: string = 'Erro ao carregar dados do servidor.'
 ): Promise<T> {
     return execResilient(fn, {
-        timeoutMs: 15000,
+        timeoutMs: 25000, // Aumentado de 15s para 25s
         retries: 3,
         errorMessage
     });
