@@ -633,7 +633,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     // Auto-refresh: Recarregar dados automaticamente a cada 5 minutos (para monitoramento)
     useEffect(() => {
         const interval = setInterval(() => {
-            if (state.isAuthenticated && !state.loading && state.isOnline) {
+            if (state.isAuthenticated && !state.loading && state.isOnline && !document.hidden) {
                 console.log('[AppContext] Auto-refresh de dados acionado...');
                 loadData();
             }
