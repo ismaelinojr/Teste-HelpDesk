@@ -25,7 +25,7 @@ export async function probeConnection(timeoutMs: number = 8000): Promise<boolean
     try {
         await withTimeout(
             Promise.resolve(
-                supabase.from('status_config').select('id').limit(1).then(({ error }) => {
+                supabase.from('status_configs').select('id').limit(1).then(({ error }) => {
                     if (error) throw error;
                 })
             ),

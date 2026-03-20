@@ -111,6 +111,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     const lastFocusCheckRef = useRef(0);
     const isCheckingFocusRef = useRef(false);
     const lastHiddenTimeRef = useRef(Date.now());
+    // Ref para evitar loadData duplicado do onAuthStateChange logo após visibilitychange
+    const visibilityReturnCooldownRef = useRef(0);
 
     // Carrega todos os dados do Supabase (com guard contra execução paralela)
     // O parâmetro fromVisibilityReturn indica se foi chamado ao retornar à aba (para ativar probe gateway)
@@ -141,7 +143,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             }
 
             if (!probeOk) {
-                console.warn('[AppContext] Probe falhou 3 vezes. Tentando loadData mesmo assim...');
+                console.warn('[AppContext] Probe falhou 3 vezes. Conexão indisponível, aguardando próximo ciclo.');
+                setState(prev => ({ ...prev, isConnectionStable: false, isReconnecting: false }));
+                isLoadingDataRef.current = false;
+                return;
             }
         }
 
@@ -234,7 +239,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
                         currentUser: usuario,
                         isAuthenticated: true,
                     }));
-                    loadData();
+                    // Evitar loadData duplicado se o visibilitychange já disparou recentemente
+                    if (Date.now() < visibilityReturnCooldownRef.current) {
+                        console.log('[AppContext] loadData suprimido (cooldown pós-visibilitychange ativo).');
+                    } else {
+                        loadData();
+                    }
                 }
             }
         });
@@ -707,6 +717,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
             isCheckingFocusRef.current = true;
             lastFocusCheckRef.current = now;
+            // Cooldown de 30s para evitar loadData duplicado do onAuthStateChange
+            visibilityReturnCooldownRef.current = now + 30000;
 
             // Iniciar período de warmup proporcional à inatividade
             const warmupMs = inactiveMinutes > 5 ? 20000 : 15000;
