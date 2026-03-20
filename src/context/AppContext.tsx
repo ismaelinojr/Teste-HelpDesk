@@ -9,7 +9,7 @@ import * as slaService from '../services/slaService';
 import * as authService from '../services/authService';
 import { useNotification } from './NotificationContext';
 import { withTimeout } from '../utils/promiseUtils';
-import { isSystemZombie, startWarmupPeriod, probeConnection } from '../utils/supabaseUtils';
+import { isSystemZombie, startWarmupPeriod, probeConnection, setColdStarting, isColdStarting } from '../utils/supabaseUtils';
 
 interface AppState {
     chamados: Chamado[];
@@ -107,6 +107,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
     // Ref para evitar loadData simultâneo
     const isLoadingDataRef = useRef(false);
+    // Ref para bloquear loadData do onAuthStateChange durante reconexão
+    const isReconnectingRef = useRef(false);
     // Ref para controle de verificação de foco
     const lastFocusCheckRef = useRef(0);
     const isCheckingFocusRef = useRef(false);
@@ -126,19 +128,24 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         // Se vindo de retorno de foco, ativar estado de reconexão e probe gateway
         if (fromVisibilityReturn) {
             setState(prev => ({ ...prev, isReconnecting: true, isConnectionStable: false }));
+            isReconnectingRef.current = true;
+            setColdStarting(true);
 
             // Probe gateway: verificar se Supabase responde antes das 8 queries pesadas
+            // Backoff agressivo (5s, 10s, 20s) para tolerar cold-start do Supabase Free
+            const probeDelays = [5000, 10000, 20000];
             let probeOk = false;
             for (let attempt = 1; attempt <= 3; attempt++) {
                 console.log(`[AppContext] Probe de conexão tentativa ${attempt}/3...`);
-                probeOk = await probeConnection(8000);
+                probeOk = await probeConnection(12000);
                 if (probeOk) {
                     console.log('[AppContext] Probe de conexão OK. Carregando dados...');
                     break;
                 }
                 if (attempt < 3) {
-                    console.log(`[AppContext] Probe falhou, aguardando ${3 * attempt}s antes de tentar novamente...`);
-                    await new Promise(resolve => setTimeout(resolve, 3000 * attempt));
+                    const delay = probeDelays[attempt - 1];
+                    console.log(`[AppContext] Probe falhou, aguardando ${delay / 1000}s antes de tentar novamente...`);
+                    await new Promise(resolve => setTimeout(resolve, delay));
                 }
             }
 
@@ -146,6 +153,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
                 console.warn('[AppContext] Probe falhou 3 vezes. Conexão indisponível, aguardando próximo ciclo.');
                 setState(prev => ({ ...prev, isConnectionStable: false, isReconnecting: false }));
                 isLoadingDataRef.current = false;
+                isReconnectingRef.current = false;
+                setColdStarting(false);
                 return;
             }
         }
@@ -160,12 +169,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             const pContatos = clientService.getAllContatos();
             const pInteracoes = ticketService.getAllInteracoes();
 
-            // Envolvemos o Promise.all com um timeout global aumentado para 45s
+            // Envolvemos o Promise.all com um timeout global de 60s (cold-start pode demorar)
             const [chamados, usuarios, clientes, categorias, statuses, slas, contatos, allInteracoes] = await withTimeout(
                 Promise.all([
                     pChamados, pUsuarios, pClientes, pCategorias, pStatuses, pSlas, pContatos, pInteracoes
                 ]),
-                45000,
+                60000,
                 'Tempo limite excedido ao carregar dados do sistema. Verifique sua conexão e tente novamente.'
             );
 
@@ -189,6 +198,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             setState(prev => ({ ...prev, loading: false, isReconnecting: false, isConnectionStable: false }));
         } finally {
             isLoadingDataRef.current = false;
+            isReconnectingRef.current = false;
+            setColdStarting(false);
         }
     }, [showNotification]);
 
@@ -239,8 +250,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
                         currentUser: usuario,
                         isAuthenticated: true,
                     }));
-                    // Evitar loadData duplicado se o visibilitychange já disparou recentemente
-                    if (Date.now() < visibilityReturnCooldownRef.current) {
+                    // Evitar loadData duplicado se reconexão ativa ou cooldown ativo
+                    if (isReconnectingRef.current || isColdStarting()) {
+                        console.log('[AppContext] loadData suprimido (reconexão/cold-start ativo).');
+                    } else if (Date.now() < visibilityReturnCooldownRef.current) {
                         console.log('[AppContext] loadData suprimido (cooldown pós-visibilitychange ativo).');
                     } else {
                         loadData();
@@ -674,7 +687,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     // Auto-refresh: Recarregar dados automaticamente a cada 5 minutos (para monitoramento)
     useEffect(() => {
         const interval = setInterval(() => {
-            if (state.isAuthenticated && !state.loading && state.isOnline && !document.hidden) {
+            // Suprimir auto-refresh durante reconexão ou cold-start
+            if (state.isAuthenticated && !state.loading && state.isOnline && !document.hidden
+                && !isReconnectingRef.current && !isColdStarting() && !isLoadingDataRef.current) {
                 console.log('[AppContext] Auto-refresh de dados acionado...');
                 loadData();
             }
@@ -749,7 +764,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
                 // Inatividade 1-5 min: verificação leve (sem retries)
                 if (inactiveMinutes <= 5) {
-                    const session = await authService.getSessionQuick();
+                    const session = await authService.getSessionQuick(false);
                     if (session === null) {
                         console.warn('[AppContext] Sessão expirada, realizando logout...');
                         logout();
@@ -764,7 +779,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
                 // Inatividade 5-30 min: verificação leve primeiro (sem retries pesados)
                 await new Promise(resolve => setTimeout(resolve, 2000));
-                const session = await authService.getSessionQuick();
+                // Usar retry para inatividade > 5min (cold-start possível)
+                const session = await authService.getSessionQuick(true);
 
                 if (session === null) {
                     console.warn('[AppContext] Sessão expirada ao focar, realizando logout...');

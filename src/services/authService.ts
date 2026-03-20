@@ -43,19 +43,32 @@ export async function inviteUser(email: string, nome: string, role: string) {
  * Ideal para retorno rápido de foco (inatividade < 5 min).
  * Retorna: Session (ativa), null (expirada), undefined (erro/timeout).
  */
-export async function getSessionQuick(): Promise<Session | null | undefined> {
-    try {
-        const { data: { session }, error } = await withTimeout(
-            supabase.auth.getSession(),
-            8000,
-            'Timeout rápido ao obter sessão'
-        );
-        if (error) throw error;
-        return session;
-    } catch (error) {
-        console.log('[AuthService] getSessionQuick falhou (esperado em retorno de inatividade curta):', (error as any).message);
-        return undefined;
+export async function getSessionQuick(withRetryOnFail: boolean = false): Promise<Session | null | undefined> {
+    const attempt = async (): Promise<Session | null | undefined> => {
+        try {
+            const { data: { session }, error } = await withTimeout(
+                supabase.auth.getSession(),
+                12000,
+                'Timeout rápido ao obter sessão'
+            );
+            if (error) throw error;
+            return session;
+        } catch (error) {
+            console.log('[AuthService] getSessionQuick falhou (esperado em retorno de inatividade):', (error as any).message);
+            return undefined;
+        }
+    };
+
+    const result = await attempt();
+    
+    // Se falhou e retry habilitado (retorno de foco > 5min), tenta mais uma vez após 5s
+    if (result === undefined && withRetryOnFail) {
+        console.log('[AuthService] getSessionQuick: aguardando 5s para retry (cold-start possível)...');
+        await new Promise(resolve => setTimeout(resolve, 5000));
+        return attempt();
     }
+    
+    return result;
 }
 
 export async function getCurrentSession(): Promise<Session | null | undefined> {

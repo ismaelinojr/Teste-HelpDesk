@@ -3,10 +3,13 @@ import { supabase } from '../lib/supabaseClient';
 
 // Monitor global de saúde da conexão
 let consecutiveFailures = 0;
-const FAILURE_THRESHOLD = 5; // Aumentado de 3 para 5 para ser menos sensível
+const FAILURE_THRESHOLD = 5;
 
 // Flag para suprimir contagem de falhas logo após retorno de visibilidade
 let warmupUntil = 0;
+
+// Flag de cold-start: bloqueia auto-refresh e disparos paralelos
+let _isColdStarting = false;
 
 /**
  * Inicia um período de warmup onde falhas de conexão NÃO são contabilizadas.
@@ -18,10 +21,40 @@ export function startWarmupPeriod(durationMs: number = 15000) {
 }
 
 /**
+ * Encerra o warmup imediatamente (chamado quando a primeira query suceder).
+ */
+export function endWarmupPeriod() {
+    if (Date.now() < warmupUntil) {
+        console.log('[SupabaseUtils] Warmup encerrado antecipadamente (conexão confirmada).');
+        warmupUntil = 0;
+    }
+}
+
+/** Retorna true se estamos em período de warmup */
+export function isInWarmup(): boolean {
+    return Date.now() < warmupUntil;
+}
+
+/** Marca início de cold-start (bloqueia chamadas paralelas) */
+export function setColdStarting(value: boolean) {
+    _isColdStarting = value;
+    if (value) {
+        console.log('[SupabaseUtils] Cold-start iniciado — chamadas paralelas bloqueadas.');
+    } else {
+        console.log('[SupabaseUtils] Cold-start finalizado.');
+    }
+}
+
+/** Retorna true se o sistema está em cold-start */
+export function isColdStarting(): boolean {
+    return _isColdStarting;
+}
+
+/**
  * Probe leve de conexão: faz uma query mínima para validar se o Supabase responde.
  * Retorna true se o servidor está acessível, false caso contrário.
  */
-export async function probeConnection(timeoutMs: number = 8000): Promise<boolean> {
+export async function probeConnection(timeoutMs: number = 10000): Promise<boolean> {
     try {
         await withTimeout(
             Promise.resolve(
@@ -85,28 +118,28 @@ export async function execResilient<T>(
         const result = await withRetry(
             () => withTimeout(fn(), timeoutMs, errorMessage),
             retries,
-            1500, // Aumentado delay base para 1.5s
+            1500,
             (error, attempt) => {
                 if (onRetry) onRetry(error, attempt);
-                // Log discreto nas tentativas intermediárias
                 console.log(`[SupabaseUtils] Tentativa de conexão ${attempt}/${retries} falhou:`, error.message);
             }
         );
         
-        // Sucesso! Resetamos o contador
+        // Sucesso! Resetamos o contador e encerramos warmup
         resetConsecutiveFailures();
+        endWarmupPeriod();
         return result;
     } catch (error: any) {
-        // Não contar falhas se: aba oculta, ou em período de warmup pós-foco
+        // Não contar falhas se: aba oculta, em período de warmup, ou em cold-start
         const isWarmup = Date.now() < warmupUntil;
-        const isRealFailure = !document.hidden && !isWarmup && (error.isTimeout || !navigator.onLine || error.message?.includes('fetch'));
-        if (isRealFailure) {
+        const shouldCount = !document.hidden && !isWarmup && !_isColdStarting;
+
+        if (shouldCount) {
             consecutiveFailures++;
             console.error(`[SupabaseUtils] Chamada falhou permanentemente (${consecutiveFailures}/${FAILURE_THRESHOLD}):`, error.message);
-        } else if (document.hidden) {
-            console.log('[SupabaseUtils] Falha ignorada (aba oculta):', error.message);
-        } else if (isWarmup) {
-            console.log('[SupabaseUtils] Falha ignorada (warmup pós-foco):', error.message);
+        } else {
+            const reason = document.hidden ? 'aba oculta' : isWarmup ? 'warmup pós-foco' : 'cold-start ativo';
+            console.log(`[SupabaseUtils] Falha ignorada (${reason}):`, error.message);
         }
         throw error;
     }
@@ -120,8 +153,8 @@ export async function execMutation<T>(
     errorMessage: string = 'Falha ao salvar dados. Verifique sua conexão.'
 ): Promise<T> {
     return execResilient(fn, {
-        timeoutMs: 35000, // Aumentado de 20s para 35s
-        retries: 2, // Aumentado de 1 para 2 retries para mutações
+        timeoutMs: 35000,
+        retries: 2,
         errorMessage
     });
 }
@@ -134,7 +167,7 @@ export async function execQuery<T>(
     errorMessage: string = 'Erro ao carregar dados do servidor.'
 ): Promise<T> {
     return execResilient(fn, {
-        timeoutMs: 25000, // Aumentado de 15s para 25s
+        timeoutMs: 25000,
         retries: 3,
         errorMessage
     });
