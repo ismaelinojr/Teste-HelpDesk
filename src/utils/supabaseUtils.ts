@@ -4,6 +4,18 @@ import { withTimeout, withRetry } from './promiseUtils';
 let consecutiveFailures = 0;
 const FAILURE_THRESHOLD = 5; // Aumentado de 3 para 5 para ser menos sensível
 
+// Flag para suprimir contagem de falhas logo após retorno de visibilidade
+let warmupUntil = 0;
+
+/**
+ * Inicia um período de warmup onde falhas de conexão NÃO são contabilizadas.
+ * Útil quando a aba volta ao foco e a rede ainda está "acordando".
+ */
+export function startWarmupPeriod(durationMs: number = 10000) {
+    warmupUntil = Date.now() + durationMs;
+    console.log(`[SupabaseUtils] Período de warmup iniciado (${durationMs}ms).`);
+}
+
 export function getConsecutiveFailures() {
     return consecutiveFailures;
 }
@@ -63,13 +75,16 @@ export async function execResilient<T>(
         resetConsecutiveFailures();
         return result;
     } catch (error: any) {
-        // Só incrementar falhas se a aba está visível (aba oculta = throttle do navegador = falso positivo)
-        const isRealFailure = !document.hidden && (error.isTimeout || !navigator.onLine || error.message?.includes('fetch'));
+        // Não contar falhas se: aba oculta, ou em período de warmup pós-foco
+        const isWarmup = Date.now() < warmupUntil;
+        const isRealFailure = !document.hidden && !isWarmup && (error.isTimeout || !navigator.onLine || error.message?.includes('fetch'));
         if (isRealFailure) {
             consecutiveFailures++;
             console.error(`[SupabaseUtils] Chamada falhou permanentemente (${consecutiveFailures}/${FAILURE_THRESHOLD}):`, error.message);
         } else if (document.hidden) {
             console.log('[SupabaseUtils] Falha ignorada (aba oculta):', error.message);
+        } else if (isWarmup) {
+            console.log('[SupabaseUtils] Falha ignorada (warmup pós-foco):', error.message);
         }
         throw error;
     }

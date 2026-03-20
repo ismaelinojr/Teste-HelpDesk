@@ -9,7 +9,7 @@ import * as slaService from '../services/slaService';
 import * as authService from '../services/authService';
 import { useNotification } from './NotificationContext';
 import { withTimeout } from '../utils/promiseUtils';
-import { isSystemZombie } from '../utils/supabaseUtils';
+import { isSystemZombie, startWarmupPeriod } from '../utils/supabaseUtils';
 
 interface AppState {
     chamados: Chamado[];
@@ -146,6 +146,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
                 statusConfigs: statuses,
                 slaConfigs: slas,
                 loading: false,
+                isConnectionStable: true,
             }));
         } catch (err: any) {
             console.error('Erro ao carregar dados:', err);
@@ -677,6 +678,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             isCheckingFocusRef.current = true;
             lastFocusCheckRef.current = now;
 
+            // Iniciar período de warmup para suprimir contagem de falhas durante aquecimento
+            startWarmupPeriod(10000);
+
             console.log(`[AppContext] Aba visível novamente (após ${inactiveMinutes.toFixed(1)} min de inatividade).`);
 
             try {
@@ -693,12 +697,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
                     // Sessão ainda ativa após 30min — apenas recarregar dados
                     console.log('[AppContext] Sessão ainda ativa após inatividade longa. Recarregando dados...');
                     await loadData();
-                    setState(prev => ({ ...prev, isConnectionStable: true }));
                     return;
                 }
 
                 // Dar tempo para a rede "acordar" — proporcional à inatividade
-                const delay = inactiveMinutes > 5 ? 1200 : 600;
+                const delay = inactiveMinutes > 5 ? 2000 : 600;
                 await new Promise(resolve => setTimeout(resolve, delay));
 
                 // Inatividade 1-5 min: verificação leve (sem retries)
@@ -712,27 +715,30 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
                         console.log('[AppContext] Verificação leve falhou, aguardando próximo ciclo ou ação do usuário.');
                     } else {
                         console.log('[AppContext] Sessão validada com sucesso.');
-                        setState(prev => ({ ...prev, isConnectionStable: true }));
                     }
                     return;
                 }
 
-                // Inatividade 5-30 min: verificação com retry moderado
-                let session = await authService.getCurrentSession();
+                // Inatividade 5-30 min: verificação leve primeiro (sem retries pesados)
+                await new Promise(resolve => setTimeout(resolve, 2000));
+                const session = await authService.getSessionQuick();
 
                 if (session === null) {
                     console.warn('[AppContext] Sessão expirada ao focar, realizando logout...');
                     logout();
                 } else if (session === undefined) {
-                    console.warn('[AppContext] Falha na verificação pós-foco.');
-                    setState(prev => ({ ...prev, isConnectionStable: false }));
+                    // Verificação leve falhou — tentar carregar dados diretamente
+                    console.log('[AppContext] Verificação pós-foco inconclusiva. Tentando carregar dados...');
+                    try {
+                        await loadData();
+                        // Se loadData() suceder, isConnectionStable já será true
+                    } catch (loadErr) {
+                        console.warn('[AppContext] loadData também falhou pós-foco.');
+                        setState(prev => ({ ...prev, isConnectionStable: false }));
+                    }
                 } else {
                     console.log('[AppContext] Sessão validada com sucesso.');
-                    setState(prev => ({ ...prev, isConnectionStable: true }));
-                    // Recarregar dados se houve instabilidade prévia
-                    if (!state.isConnectionStable) {
-                        await loadData();
-                    }
+                    await loadData();
                 }
             } catch (err) {
                 console.error('[AppContext] Erro no handleVisibilityChange:', err);
@@ -743,7 +749,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
         document.addEventListener('visibilitychange', handleVisibilityChange);
         return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
-    }, [state.isAuthenticated, state.isConnectionStable, loadData, logout, showNotification]);
+    }, [state.isAuthenticated, loadData, logout, showNotification]);
 
     return (
         <AppContext.Provider value={{
