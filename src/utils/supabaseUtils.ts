@@ -1,4 +1,5 @@
 import { withTimeout, withRetry } from './promiseUtils';
+import { supabase } from '../lib/supabaseClient';
 
 // Monitor global de saúde da conexão
 let consecutiveFailures = 0;
@@ -11,9 +12,30 @@ let warmupUntil = 0;
  * Inicia um período de warmup onde falhas de conexão NÃO são contabilizadas.
  * Útil quando a aba volta ao foco e a rede ainda está "acordando".
  */
-export function startWarmupPeriod(durationMs: number = 10000) {
+export function startWarmupPeriod(durationMs: number = 15000) {
     warmupUntil = Date.now() + durationMs;
     console.log(`[SupabaseUtils] Período de warmup iniciado (${durationMs}ms).`);
+}
+
+/**
+ * Probe leve de conexão: faz uma query mínima para validar se o Supabase responde.
+ * Retorna true se o servidor está acessível, false caso contrário.
+ */
+export async function probeConnection(timeoutMs: number = 8000): Promise<boolean> {
+    try {
+        await withTimeout(
+            Promise.resolve(
+                supabase.from('status_config').select('id').limit(1).then(({ error }) => {
+                    if (error) throw error;
+                })
+            ),
+            timeoutMs,
+            'Probe de conexão expirou'
+        );
+        return true;
+    } catch {
+        return false;
+    }
 }
 
 export function getConsecutiveFailures() {

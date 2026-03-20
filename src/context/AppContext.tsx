@@ -9,7 +9,7 @@ import * as slaService from '../services/slaService';
 import * as authService from '../services/authService';
 import { useNotification } from './NotificationContext';
 import { withTimeout } from '../utils/promiseUtils';
-import { isSystemZombie, startWarmupPeriod } from '../utils/supabaseUtils';
+import { isSystemZombie, startWarmupPeriod, probeConnection } from '../utils/supabaseUtils';
 
 interface AppState {
     chamados: Chamado[];
@@ -25,6 +25,7 @@ interface AppState {
     loading: boolean;
     isOnline: boolean;
     isConnectionStable: boolean;
+    isReconnecting: boolean;
     isZombie: boolean;
 }
 
@@ -78,6 +79,7 @@ interface AppContextType extends AppState {
     addSLA: (sla: Omit<SLAConfig, 'id'>) => Promise<SLAConfig>;
     updateSLA: (id: string, data: Partial<SLAConfig>) => Promise<SLAConfig>;
     deleteSLA: (id: string) => Promise<void>;
+    isReconnecting: boolean;
     reconnect: () => Promise<void>;
 }
 
@@ -99,6 +101,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         loading: true,
         isOnline: navigator.onLine,
         isConnectionStable: true,
+        isReconnecting: false,
         isZombie: false,
     });
 
@@ -110,12 +113,38 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     const lastHiddenTimeRef = useRef(Date.now());
 
     // Carrega todos os dados do Supabase (com guard contra execução paralela)
-    const loadData = useCallback(async () => {
+    // O parâmetro fromVisibilityReturn indica se foi chamado ao retornar à aba (para ativar probe gateway)
+    const loadData = useCallback(async (fromVisibilityReturn: boolean = false) => {
         if (isLoadingDataRef.current) {
             console.log('[AppContext] loadData já em execução, ignorando chamada duplicada.');
             return;
         }
         isLoadingDataRef.current = true;
+
+        // Se vindo de retorno de foco, ativar estado de reconexão e probe gateway
+        if (fromVisibilityReturn) {
+            setState(prev => ({ ...prev, isReconnecting: true, isConnectionStable: false }));
+
+            // Probe gateway: verificar se Supabase responde antes das 8 queries pesadas
+            let probeOk = false;
+            for (let attempt = 1; attempt <= 3; attempt++) {
+                console.log(`[AppContext] Probe de conexão tentativa ${attempt}/3...`);
+                probeOk = await probeConnection(8000);
+                if (probeOk) {
+                    console.log('[AppContext] Probe de conexão OK. Carregando dados...');
+                    break;
+                }
+                if (attempt < 3) {
+                    console.log(`[AppContext] Probe falhou, aguardando ${3 * attempt}s antes de tentar novamente...`);
+                    await new Promise(resolve => setTimeout(resolve, 3000 * attempt));
+                }
+            }
+
+            if (!probeOk) {
+                console.warn('[AppContext] Probe falhou 3 vezes. Tentando loadData mesmo assim...');
+            }
+        }
+
         try {
             const pChamados = ticketService.getTickets();
             const pUsuarios = userService.getUsers();
@@ -147,11 +176,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
                 slaConfigs: slas,
                 loading: false,
                 isConnectionStable: true,
+                isReconnecting: false,
             }));
         } catch (err: any) {
             console.error('Erro ao carregar dados:', err);
             showNotification(err.message || 'Falha ao carregar dados do sistema. Verifique sua conexão.', 'error');
-            setState(prev => ({ ...prev, loading: false }));
+            setState(prev => ({ ...prev, loading: false, isReconnecting: false, isConnectionStable: false }));
         } finally {
             isLoadingDataRef.current = false;
         }
@@ -678,10 +708,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             isCheckingFocusRef.current = true;
             lastFocusCheckRef.current = now;
 
-            // Iniciar período de warmup para suprimir contagem de falhas durante aquecimento
-            startWarmupPeriod(10000);
+            // Iniciar período de warmup proporcional à inatividade
+            const warmupMs = inactiveMinutes > 5 ? 20000 : 15000;
+            startWarmupPeriod(warmupMs);
 
-            console.log(`[AppContext] Aba visível novamente (após ${inactiveMinutes.toFixed(1)} min de inatividade).`);
+            console.log(`[AppContext] Aba visível novamente (após ${inactiveMinutes.toFixed(1)} min de inatividade). Warmup: ${warmupMs}ms`);
 
             try {
                 // Inatividade > 30 min: reload direto — sessão provavelmente expirou
@@ -694,14 +725,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
                         setTimeout(() => window.location.reload(), 2000);
                         return;
                     }
-                    // Sessão ainda ativa após 30min — apenas recarregar dados
+                    // Sessão ainda ativa após 30min — recarregar dados com probe gateway
                     console.log('[AppContext] Sessão ainda ativa após inatividade longa. Recarregando dados...');
-                    await loadData();
+                    await loadData(true);
                     return;
                 }
 
                 // Dar tempo para a rede "acordar" — proporcional à inatividade
-                const delay = inactiveMinutes > 5 ? 2000 : 600;
+                const delay = inactiveMinutes > 5 ? 3000 : 1500;
                 await new Promise(resolve => setTimeout(resolve, delay));
 
                 // Inatividade 1-5 min: verificação leve (sem retries)
@@ -727,18 +758,18 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
                     console.warn('[AppContext] Sessão expirada ao focar, realizando logout...');
                     logout();
                 } else if (session === undefined) {
-                    // Verificação leve falhou — tentar carregar dados diretamente
-                    console.log('[AppContext] Verificação pós-foco inconclusiva. Tentando carregar dados...');
+                    // Verificação leve falhou — tentar carregar dados com probe gateway
+                    console.log('[AppContext] Verificação pós-foco inconclusiva. Tentando carregar dados com probe...');
                     try {
-                        await loadData();
+                        await loadData(true);
                         // Se loadData() suceder, isConnectionStable já será true
                     } catch (loadErr) {
                         console.warn('[AppContext] loadData também falhou pós-foco.');
-                        setState(prev => ({ ...prev, isConnectionStable: false }));
+                        setState(prev => ({ ...prev, isConnectionStable: false, isReconnecting: false }));
                     }
                 } else {
-                    console.log('[AppContext] Sessão validada com sucesso.');
-                    await loadData();
+                    console.log('[AppContext] Sessão validada com sucesso. Recarregando dados...');
+                    await loadData(true);
                 }
             } catch (err) {
                 console.error('[AppContext] Erro no handleVisibilityChange:', err);

@@ -47,7 +47,7 @@ export async function getSessionQuick(): Promise<Session | null | undefined> {
     try {
         const { data: { session }, error } = await withTimeout(
             supabase.auth.getSession(),
-            5000,
+            8000,
             'Timeout rápido ao obter sessão'
         );
         if (error) throw error;

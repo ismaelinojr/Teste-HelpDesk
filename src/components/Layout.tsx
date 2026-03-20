@@ -13,6 +13,7 @@ import {
     Wifi,
     WifiOff,
     AlertCircle,
+    Loader2,
 } from 'lucide-react';
 import { ConnectionRecovery } from './ConnectionRecovery';
 
@@ -34,7 +35,7 @@ function getPageTitle(pathname: string): string {
 
 export default function Layout() {
     const [sidebarOpen, setSidebarOpen] = useState(false);
-    const { currentUser, logout, isOnline, isConnectionStable, reconnect } = useApp();
+    const { currentUser, logout, isOnline, isConnectionStable, isReconnecting, reconnect } = useApp();
     const location = useLocation();
 
     if (!currentUser) return null;
@@ -124,6 +125,11 @@ export default function Layout() {
                         <div className="connection-badge offline">
                             <WifiOff size={14} />
                             <span>Offline</span>
+                        </div>
+                    ) : isReconnecting ? (
+                        <div className="connection-badge reconnecting">
+                            <Loader2 size={14} className="animate-spin-badge" />
+                            <span>Reconectando...</span>
                         </div>
                     ) : !isConnectionStable ? (
                         <button 
@@ -250,6 +256,14 @@ export default function Layout() {
                     background: rgba(250, 179, 135, 0.1);
                     color: #fab387;
                 }
+                .connection-badge.reconnecting {
+                    background: rgba(249, 226, 175, 0.15);
+                    color: #f9e2af;
+                    animation: glow-pulse 2s ease-in-out infinite;
+                }
+                .animate-spin-badge {
+                    animation: spin-badge 1s linear infinite;
+                }
                 .connection-badge.clickable {
                     cursor: pointer;
                     border: 1px solid transparent;
@@ -267,6 +281,14 @@ export default function Layout() {
                     0% { opacity: 1; }
                     50% { opacity: 0.6; }
                     100% { opacity: 1; }
+                }
+                @keyframes spin-badge {
+                    from { transform: rotate(0deg); }
+                    to { transform: rotate(360deg); }
+                }
+                @keyframes glow-pulse {
+                    0%, 100% { box-shadow: 0 0 4px rgba(249, 226, 175, 0.1); }
+                    50% { box-shadow: 0 0 10px rgba(249, 226, 175, 0.3); }
                 }
             `}</style>
         </div>
