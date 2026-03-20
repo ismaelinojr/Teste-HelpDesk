@@ -38,11 +38,30 @@ export async function inviteUser(email: string, nome: string, role: string) {
     return data;
 }
 
+/**
+ * Verificação leve de sessão: sem retries, timeout curto.
+ * Ideal para retorno rápido de foco (inatividade < 5 min).
+ * Retorna: Session (ativa), null (expirada), undefined (erro/timeout).
+ */
+export async function getSessionQuick(): Promise<Session | null | undefined> {
+    try {
+        const { data: { session }, error } = await withTimeout(
+            supabase.auth.getSession(),
+            5000,
+            'Timeout rápido ao obter sessão'
+        );
+        if (error) throw error;
+        return session;
+    } catch (error) {
+        console.log('[AuthService] getSessionQuick falhou (esperado em retorno de inatividade curta):', (error as any).message);
+        return undefined;
+    }
+}
+
 export async function getCurrentSession(): Promise<Session | null | undefined> {
     console.log('[AuthService] Chamando getSession()...');
     
     try {
-        // Usamos execResilient com 10s de timeout e 3 tentativas
         const session = await execResilient(
             async () => {
                 const { data: { session }, error } = await supabase.auth.getSession();
@@ -50,37 +69,37 @@ export async function getCurrentSession(): Promise<Session | null | undefined> {
                 return session;
             },
             {
-                timeoutMs: 15000, // Aumentado de 10s para 15s
-                retries: 3,
+                timeoutMs: 15000,
+                retries: 2, // Reduzido de 3 para 2 retries
                 errorMessage: 'Timeout ao obter sessão do Supabase',
-                onRetry: (error, attempt) => console.warn(`[AuthService] Tentativa ${attempt} de getSession falhou:`, error.message)
+                onRetry: (error, attempt) => console.log(`[AuthService] Retry ${attempt} de getSession:`, error.message)
             }
         );
         
         console.log('[AuthService] getSession() retornou com sucesso:', session ? 'Sessão ativa' : 'Sem sessão');
         return session;
     } catch (error: any) {
-        console.warn('[AuthService] Todas as tentativas de getSession falharam. Tentando fallback para getUser()...', error);
+        console.log('[AuthService] getSession com retry falhou. Tentando fallback getUser()...');
         
         try {
-            // Fallback: getUser() força uma chamada de rede e pode "acordar" a conexão melhor que getSession
+            // Fallback: getUser() força uma chamada de rede
             const { data: { user }, error: userError } = await withTimeout(
                 supabase.auth.getUser(),
-                15000,
+                8000, // Reduzido de 15s para 8s
                 'Timeout no fallback getUser'
             );
             
             if (userError) throw userError;
             
             if (user) {
-                console.log('[AuthService] Fallback getUser() funcionou. Tentando obter sessão novamente...');
+                console.log('[AuthService] Fallback getUser() funcionou. Obtendo sessão...');
                 const { data: { session } } = await supabase.auth.getSession();
                 return session;
             }
             
             return null;
         } catch (fallbackError) {
-            console.error('[AuthService] Fallback para getUser() também falhou:', fallbackError);
+            console.error('[AuthService] Fallback getUser() também falhou:', (fallbackError as any).message);
             return undefined;
         }
     }

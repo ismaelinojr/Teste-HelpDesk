@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import type { Chamado, Usuario, Cliente, Interacao, StatusChamado, ContatoCliente, CategoriaChamado, StatusConfig, SLAConfig } from '../types';
 import * as ticketService from '../services/ticketService';
 import * as clientService from '../services/clientService';
@@ -102,8 +102,20 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         isZombie: false,
     });
 
-    // Carrega todos os dados do Supabase
+    // Ref para evitar loadData simultâneo
+    const isLoadingDataRef = useRef(false);
+    // Ref para controle de verificação de foco
+    const lastFocusCheckRef = useRef(0);
+    const isCheckingFocusRef = useRef(false);
+    const lastHiddenTimeRef = useRef(Date.now());
+
+    // Carrega todos os dados do Supabase (com guard contra execução paralela)
     const loadData = useCallback(async () => {
+        if (isLoadingDataRef.current) {
+            console.log('[AppContext] loadData já em execução, ignorando chamada duplicada.');
+            return;
+        }
+        isLoadingDataRef.current = true;
         try {
             const pChamados = ticketService.getTickets();
             const pUsuarios = userService.getUsers();
@@ -139,6 +151,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             console.error('Erro ao carregar dados:', err);
             showNotification(err.message || 'Falha ao carregar dados do sistema. Verifique sua conexão.', 'error');
             setState(prev => ({ ...prev, loading: false }));
+        } finally {
+            isLoadingDataRef.current = false;
         }
     }, [showNotification]);
 
@@ -628,72 +642,108 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         return () => clearInterval(interval);
     }, [state.isAuthenticated, state.loading, state.isOnline, loadData]);
 
-    // Verificação ao retomar foco: Garante que o sistema volte a vida ao trocar de aba/monitor
+    // Verificação ao retomar foco: Usa visibilitychange (mais confiável que focus)
     useEffect(() => {
-        let isChecking = false;
-        let lastFocusTime = Date.now();
+        const DEBOUNCE_MS = 10000; // Mínimo 10s entre verificações
 
-        const handleFocus = async () => {
+        const handleVisibilityChange = async () => {
+            // Registrar quando a aba fica oculta
+            if (document.hidden) {
+                lastHiddenTimeRef.current = Date.now();
+                return;
+            }
+
+            // A aba ficou visível novamente
             const now = Date.now();
-            const inactiveMinutes = (now - lastFocusTime) / (1000 * 60);
-            lastFocusTime = now;
+            const inactiveMs = now - lastHiddenTimeRef.current;
+            const inactiveMinutes = inactiveMs / (1000 * 60);
 
-            if (state.isAuthenticated && !isChecking) {
-                isChecking = true;
-                
-                // Paciência: Dá um tempo maior (1.5s) para o SO e a rede "acordarem"
-                const delay = inactiveMinutes > 5 ? 1500 : 800;
-                console.log(`[AppContext] Aba focada (após ${inactiveMinutes.toFixed(1)} min de inatividade), aguardando ${delay}ms para verificar sessão...`);
-                
-                try {
-                    const isLongInactivity = inactiveMinutes > 30;
-                    
-                    if (isLongInactivity) {
-                        console.log('[AppContext] Inatividade longa detectada, realizando refresh completo da sessão...');
+            // Guard: não verificar se não autenticado, já verificando, ou debounce ativo
+            if (!state.isAuthenticated) return;
+            if (isCheckingFocusRef.current) {
+                console.log('[AppContext] Verificação de foco já em andamento, ignorando.');
+                return;
+            }
+            if ((now - lastFocusCheckRef.current) < DEBOUNCE_MS) {
+                console.log('[AppContext] Debounce ativo, ignorando verificação de foco.');
+                return;
+            }
+
+            // Inatividade < 1 minuto: não precisa verificar
+            if (inactiveMinutes < 1) {
+                return;
+            }
+
+            isCheckingFocusRef.current = true;
+            lastFocusCheckRef.current = now;
+
+            console.log(`[AppContext] Aba visível novamente (após ${inactiveMinutes.toFixed(1)} min de inatividade).`);
+
+            try {
+                // Inatividade > 30 min: reload direto — sessão provavelmente expirou
+                if (inactiveMinutes > 30) {
+                    console.log('[AppContext] Inatividade longa (>30min), verificando sessão antes de reload...');
+                    await new Promise(resolve => setTimeout(resolve, 1500));
+                    const session = await authService.getSessionQuick();
+                    if (!session) {
+                        showNotification('Sessão expirada após longo período. Recarregando...', 'warning');
+                        setTimeout(() => window.location.reload(), 2000);
+                        return;
                     }
+                    // Sessão ainda ativa após 30min — apenas recarregar dados
+                    console.log('[AppContext] Sessão ainda ativa após inatividade longa. Recarregando dados...');
+                    await loadData();
+                    setState(prev => ({ ...prev, isConnectionStable: true }));
+                    return;
+                }
 
-                    await new Promise(resolve => setTimeout(resolve, delay));
+                // Dar tempo para a rede "acordar" — proporcional à inatividade
+                const delay = inactiveMinutes > 5 ? 1200 : 600;
+                await new Promise(resolve => setTimeout(resolve, delay));
 
-                    let session = await authService.getCurrentSession();
-                    
-                    // Se falhou (undefined), tentamos mais UMA vez após um delay extra
-                    if (session === undefined) {
-                        console.warn('[AppContext] Falha na primeira tentativa de verificação pós-foco. Tentando novamente em 2s...');
-                        await new Promise(resolve => setTimeout(resolve, 2000));
-                        session = await authService.getCurrentSession();
-                    }
-                    
+                // Inatividade 1-5 min: verificação leve (sem retries)
+                if (inactiveMinutes <= 5) {
+                    const session = await authService.getSessionQuick();
                     if (session === null) {
-                        console.warn('[AppContext] Sessão expirada ao focar, realizando logout...');
+                        console.warn('[AppContext] Sessão expirada, realizando logout...');
                         logout();
                     } else if (session === undefined) {
-                        console.warn('[AppContext] Falha persistente na conexão ao focar.');
-                        setState(prev => ({ ...prev, isConnectionStable: false }));
-                        
-                        if (isLongInactivity) {
-                            showNotification('A conexão com o servidor foi interrompida. Recarregando a página para garantir estabilidade...', 'warning');
-                            setTimeout(() => window.location.reload(), 3000);
-                        }
+                        // Falha na verificação leve — não alarmar, apenas logar
+                        console.log('[AppContext] Verificação leve falhou, aguardando próximo ciclo ou ação do usuário.');
                     } else {
                         console.log('[AppContext] Sessão validada com sucesso.');
                         setState(prev => ({ ...prev, isConnectionStable: true }));
-                        
-                        // Se houve instabilidade prévia, recarrega os dados
-                        if (!state.isConnectionStable) {
-                            await loadData();
-                        }
                     }
-                } catch (err) {
-                    console.error('[AppContext] Erro no handleFocus:', err);
-                } finally {
-                    isChecking = false;
+                    return;
                 }
+
+                // Inatividade 5-30 min: verificação com retry moderado
+                let session = await authService.getCurrentSession();
+
+                if (session === null) {
+                    console.warn('[AppContext] Sessão expirada ao focar, realizando logout...');
+                    logout();
+                } else if (session === undefined) {
+                    console.warn('[AppContext] Falha na verificação pós-foco.');
+                    setState(prev => ({ ...prev, isConnectionStable: false }));
+                } else {
+                    console.log('[AppContext] Sessão validada com sucesso.');
+                    setState(prev => ({ ...prev, isConnectionStable: true }));
+                    // Recarregar dados se houve instabilidade prévia
+                    if (!state.isConnectionStable) {
+                        await loadData();
+                    }
+                }
+            } catch (err) {
+                console.error('[AppContext] Erro no handleVisibilityChange:', err);
+            } finally {
+                isCheckingFocusRef.current = false;
             }
         };
 
-        window.addEventListener('focus', handleFocus);
-        return () => window.removeEventListener('focus', handleFocus);
-    }, [state.isAuthenticated, state.isOnline, state.isConnectionStable, loadData, logout, showNotification]);
+        document.addEventListener('visibilitychange', handleVisibilityChange);
+        return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+    }, [state.isAuthenticated, state.isConnectionStable, loadData, logout, showNotification]);
 
     return (
         <AppContext.Provider value={{

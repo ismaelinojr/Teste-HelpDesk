@@ -54,8 +54,8 @@ export async function execResilient<T>(
             1500, // Aumentado delay base para 1.5s
             (error, attempt) => {
                 if (onRetry) onRetry(error, attempt);
-                // Log de aviso mas sem incrementar consecutiveFailures aqui para não ser hipersensível
-                console.warn(`[SupabaseUtils] Tentativa de conexão ${attempt}/${retries} falhou:`, error.message);
+                // Log discreto nas tentativas intermediárias
+                console.log(`[SupabaseUtils] Tentativa de conexão ${attempt}/${retries} falhou:`, error.message);
             }
         );
         
@@ -63,10 +63,13 @@ export async function execResilient<T>(
         resetConsecutiveFailures();
         return result;
     } catch (error: any) {
-        // Se após todos os retries ainda falhou, agora sim incrementamos o contador global
-        if (error.isTimeout || !navigator.onLine || error.message?.includes('fetch')) {
+        // Só incrementar falhas se a aba está visível (aba oculta = throttle do navegador = falso positivo)
+        const isRealFailure = !document.hidden && (error.isTimeout || !navigator.onLine || error.message?.includes('fetch'));
+        if (isRealFailure) {
             consecutiveFailures++;
             console.error(`[SupabaseUtils] Chamada falhou permanentemente (${consecutiveFailures}/${FAILURE_THRESHOLD}):`, error.message);
+        } else if (document.hidden) {
+            console.log('[SupabaseUtils] Falha ignorada (aba oculta):', error.message);
         }
         throw error;
     }
