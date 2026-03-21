@@ -115,6 +115,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     const lastHiddenTimeRef = useRef(Date.now());
     // Ref para evitar loadData duplicado do onAuthStateChange logo após visibilitychange
     const visibilityReturnCooldownRef = useRef(0);
+    // Ref para reconnect estável dentro de timers (evita dependência circular)
+    const reconnectRef = useRef<() => Promise<void>>(() => Promise.resolve());
 
     // Carrega todos os dados do Supabase (com guard contra execução paralela)
     // O parâmetro fromVisibilityReturn indica se foi chamado ao retornar à aba (para ativar probe gateway)
@@ -150,11 +152,18 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             }
 
             if (!probeOk) {
-                console.warn('[AppContext] Probe falhou 3 vezes. Conexão indisponível, aguardando próximo ciclo.');
+                console.warn('[AppContext] Probe falhou 3 vezes. Conexão indisponível, agendando auto-retry em 15s.');
                 setState(prev => ({ ...prev, isConnectionStable: false, isReconnecting: false }));
                 isLoadingDataRef.current = false;
                 isReconnectingRef.current = false;
                 setColdStarting(false);
+                // Auto-retry após 15s — dá tempo ao Supabase Free estabilizar
+                setTimeout(() => {
+                    if (!isLoadingDataRef.current && !document.hidden) {
+                        console.log('[AppContext] Auto-retry pós-falha de probe...');
+                        reconnectRef.current();
+                    }
+                }, 15000);
                 return;
             }
         }
@@ -318,18 +327,46 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
     const reconnect = useCallback(async () => {
         console.log('[AppContext] Forçando reconexão manual...');
-        setState(prev => ({ ...prev, loading: true, isConnectionStable: true }));
+        setState(prev => ({ ...prev, isReconnecting: true, isConnectionStable: false }));
+
+        // Probe gateway: verificar se Supabase responde antes de qualquer coisa
+        const probeDelays = [2000, 5000, 8000];
+        let probeOk = false;
+        for (let attempt = 1; attempt <= 3; attempt++) {
+            console.log(`[AppContext] Reconexão manual — probe ${attempt}/3...`);
+            probeOk = await probeConnection(12000);
+            if (probeOk) break;
+            if (attempt < 3) {
+                const delay = probeDelays[attempt - 1];
+                console.log(`[AppContext] Probe manual falhou, aguardando ${delay / 1000}s...`);
+                await new Promise(resolve => setTimeout(resolve, delay));
+            }
+        }
+
+        if (!probeOk) {
+            console.error('[AppContext] Reconexão manual falhou (probe 3x).');
+            setState(prev => ({ ...prev, isConnectionStable: false, isReconnecting: false }));
+            showNotification('Servidor indisponível. Tente novamente em alguns segundos.', 'error');
+            return;
+        }
+
+        // Probe OK — carregar dados
         try {
-            await authService.getCurrentSession();
+            // Garantir que isLoadingDataRef permite nova execução
+            isLoadingDataRef.current = false;
             await loadData();
             showNotification('Conexão restabelecida com sucesso.', 'success');
         } catch (err) {
             console.error('[AppContext] Falha na reconexão manual:', err);
-            showNotification('Não foi possível restabelecer a conexão. Tente novamente ou use Ctrl+F5.', 'error');
+            showNotification('Não foi possível carregar os dados. Tente novamente.', 'error');
+            setState(prev => ({ ...prev, isConnectionStable: false }));
         } finally {
-            setState(prev => ({ ...prev, loading: false }));
+            setState(prev => ({ ...prev, isReconnecting: false }));
         }
     }, [loadData, showNotification]);
+
+    // Manter ref atualizada para uso em timers (auto-retry)
+    useEffect(() => { reconnectRef.current = reconnect; }, [reconnect]);
 
     const assumirChamado = useCallback(async (chamadoId: string) => {
         if (!state.currentUser) return;
