@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
 import { useNotification } from '../context/NotificationContext';
 import { calcularSLA, formatarTempo, formatarData } from '../utils/sla';
-import type { Interacao, StatusChamado } from '../types';
+import type { Interacao, StatusChamado, ContatoCliente } from '../types';
 import {
     ArrowLeft,
     Send,
@@ -18,6 +18,8 @@ export default function TicketDetail() {
     const navigate = useNavigate();
     const {
         chamados,
+        clientes,
+        getContatosByCliente,
         categoriasChamado,
         getClienteNome,
         getTecnicoNome,
@@ -43,14 +45,16 @@ export default function TicketDetail() {
 
     const [showEditModal, setShowEditModal] = useState(false);
     const [showDeleteModal, setShowDeleteModal] = useState(false);
+    const [contatos, setContatos] = useState<ContatoCliente[]>([]);
     
     // For edit form
     const [editData, setEditData] = useState<{
+        clienteId: string;
         contatoNome: string;
         titulo: string;
         descricao: string;
         categoriaId: string;
-    }>({ contatoNome: '', titulo: '', descricao: '', categoriaId: '' });
+    }>({ clienteId: '', contatoNome: '', titulo: '', descricao: '', categoriaId: '' });
 
     const chamado = chamados.find(c => c.id === id);
 
@@ -60,6 +64,14 @@ export default function TicketDetail() {
         setInteracoes(data);
         setLoading(false);
     }, [id, getInteracoes]);
+
+    useEffect(() => {
+        if (!editData.clienteId) {
+            setContatos([]);
+            return;
+        }
+        getContatosByCliente(editData.clienteId).then(data => setContatos(data));
+    }, [editData.clienteId, getContatosByCliente]);
 
     useEffect(() => {
         loadInteracoes();
@@ -119,6 +131,7 @@ export default function TicketDetail() {
     const handleOpenEdit = () => {
         if (!chamado) return;
         setEditData({
+            clienteId: chamado.clienteId || '',
             contatoNome: chamado.contatoNome || '',
             titulo: chamado.titulo,
             descricao: chamado.descricao,
@@ -128,8 +141,8 @@ export default function TicketDetail() {
     };
 
     const handleSaveEdit = async () => {
-        if (!id || !editData.titulo.trim() || !editData.descricao.trim()) {
-            showNotification('Título e Descrição são obrigatórios.', 'warning');
+        if (!id || !editData.clienteId || !editData.contatoNome || !editData.titulo.trim() || !editData.descricao.trim()) {
+            showNotification('Laboratório, Solicitante, Título e Descrição são obrigatórios.', 'warning');
             return;
         }
         try {
@@ -401,13 +414,29 @@ export default function TicketDetail() {
                         </div>
                         <div className="modal-body" style={{ maxHeight: '70vh', overflowY: 'auto' }}>
                             <div className="form-group">
-                                <label>Solicitante</label>
-                                <input
-                                    type="text"
+                                <label>Laboratório *</label>
+                                <select
+                                    value={editData.clienteId}
+                                    onChange={(e) => setEditData({...editData, clienteId: e.target.value, contatoNome: ''})}
+                                >
+                                    <option value="">Selecione o laboratório...</option>
+                                    {clientes.map(c => (
+                                        <option key={c.id} value={c.id}>{c.nome}</option>
+                                    ))}
+                                </select>
+                            </div>
+                            <div className="form-group">
+                                <label>Solicitante *</label>
+                                <select
                                     value={editData.contatoNome}
                                     onChange={(e) => setEditData({...editData, contatoNome: e.target.value})}
-                                    placeholder="Nome do solicitante"
-                                />
+                                    disabled={!editData.clienteId}
+                                >
+                                    <option value="">Selecione o solicitante...</option>
+                                    {contatos.map(c => (
+                                        <option key={c.id} value={c.nome}>{c.nome} {c.funcao ? `(${c.funcao})` : ''}</option>
+                                    ))}
+                                </select>
                             </div>
                             <div className="form-group">
                                 <label>Título *</label>
@@ -444,7 +473,7 @@ export default function TicketDetail() {
                             <button
                                 className="btn btn-primary"
                                 onClick={handleSaveEdit}
-                                disabled={!editData.titulo.trim() || !editData.descricao.trim()}
+                                disabled={!editData.clienteId || !editData.contatoNome || !editData.titulo.trim() || !editData.descricao.trim()}
                             >
                                 Salvar Alterações
                             </button>

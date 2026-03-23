@@ -397,6 +397,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         if (!state.currentUser) throw new Error('Usuário não logado');
         await ticketService.updateTicket(chamadoId, data);
         const camposEditados: string[] = [];
+        if ('clienteId' in data) camposEditados.push('Laboratório');
         if ('contatoNome' in data) camposEditados.push('Solicitante');
         if ('titulo' in data) camposEditados.push('Título');
         if ('descricao' in data) camposEditados.push('Descrição');
