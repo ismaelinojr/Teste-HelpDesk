@@ -395,22 +395,44 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
     const editarChamado = useCallback(async (chamadoId: string, data: Partial<Chamado>) => {
         if (!state.currentUser) throw new Error('Usuário não logado');
+        const chamadoAntigo = state.chamados.find(c => c.id === chamadoId);
+
         await ticketService.updateTicket(chamadoId, data);
-        const camposEditados: string[] = [];
-        if ('clienteId' in data) camposEditados.push('Laboratório');
-        if ('contatoNome' in data) camposEditados.push('Solicitante');
-        if ('titulo' in data) camposEditados.push('Título');
-        if ('descricao' in data) camposEditados.push('Descrição');
-        if ('categoriaId' in data) camposEditados.push('Tipo');
-        if (camposEditados.length > 0) {
-            await ticketService.addInteracao(
-                chamadoId, 
-                state.currentUser.id, 
-                `Chamado editado. Campos alterados: ${camposEditados.join(', ')}.`
-            );
+        
+        if (chamadoAntigo) {
+            const alteracoes: string[] = [];
+            
+            if (data.clienteId && data.clienteId !== chamadoAntigo.clienteId) {
+                const labAntigo = state.clientes.find(c => c.id === chamadoAntigo.clienteId)?.nome || 'Desconhecido';
+                const labNovo = state.clientes.find(c => c.id === data.clienteId)?.nome || 'Desconhecido';
+                alteracoes.push(`Laboratório alterado de "${labAntigo}" para "${labNovo}"`);
+            }
+            if (data.contatoNome && data.contatoNome !== chamadoAntigo.contatoNome) {
+                alteracoes.push(`Solicitante alterado de "${chamadoAntigo.contatoNome || 'Não informado'}" para "${data.contatoNome}"`);
+            }
+            if (data.titulo && data.titulo !== chamadoAntigo.titulo) {
+                alteracoes.push(`Título alterado de "${chamadoAntigo.titulo}" para "${data.titulo}"`);
+            }
+            if (data.descricao && data.descricao !== chamadoAntigo.descricao) {
+                alteracoes.push(`Descrição atualizada`);
+            }
+            if (data.categoriaId && data.categoriaId !== chamadoAntigo.categoriaId) {
+                const catAntiga = state.categoriasChamado.find(c => c.id === chamadoAntigo.categoriaId)?.nome || 'Desconhecido';
+                const catNova = state.categoriasChamado.find(c => c.id === data.categoriaId)?.nome || 'Desconhecido';
+                alteracoes.push(`Tipo alterado de "${catAntiga}" para "${catNova}"`);
+            }
+
+            if (alteracoes.length > 0) {
+                await ticketService.addInteracao(
+                    chamadoId, 
+                    state.currentUser.id, 
+                    `Chamado editado. Alterações:\n- ${alteracoes.join('\n- ')}`
+                );
+            }
         }
+
         await refreshChamados();
-    }, [state.currentUser, refreshChamados]);
+    }, [state.currentUser, state.chamados, state.clientes, state.categoriasChamado, refreshChamados]);
 
     const excluirChamado = useCallback(async (chamadoId: string) => {
         await ticketService.deleteTicket(chamadoId);
