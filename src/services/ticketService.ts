@@ -233,3 +233,42 @@ export function resetData() {
     // Não aplicável com Supabase — dados são persistentes
     console.warn('resetData() não é suportado com Supabase');
 }
+
+export async function updateTicket(id: string, updates: Partial<Chamado>): Promise<Chamado | undefined> {
+    const dbUpdates: Record<string, unknown> = {};
+    if (updates.contatoNome !== undefined) dbUpdates.contato_nome = updates.contatoNome;
+    if (updates.titulo !== undefined) dbUpdates.titulo = updates.titulo;
+    if (updates.descricao !== undefined) dbUpdates.descricao = updates.descricao;
+    if (updates.categoriaId !== undefined) dbUpdates.categoria_id = updates.categoriaId;
+
+    const data = await execMutation(async () => {
+        const { data, error } = await supabase
+            .from('chamados')
+            .update(dbUpdates)
+            .eq('id', id)
+            .select()
+            .maybeSingle();
+        if (error) throw error;
+        return data;
+    }, 'Erro ao editar o chamado.');
+
+    return data ? mapChamado(data) : undefined;
+}
+
+export async function deleteTicket(id: string): Promise<void> {
+    await execMutation(async () => {
+        // Remover as interações preventivamente (caso não tenha ON DELETE CASCADE)
+        const { error: errorInter } = await supabase
+            .from('interacoes')
+            .delete()
+            .eq('chamado_id', id);
+        if (errorInter) throw errorInter;
+
+        const { error } = await supabase
+            .from('chamados')
+            .delete()
+            .eq('id', id);
+        if (error) throw error;
+        return null;
+    }, 'Erro ao excluir chamado.');
+}

@@ -9,6 +9,8 @@ import {
     Send,
     X,
     CheckCircle2,
+    Edit,
+    Trash2,
 } from 'lucide-react';
 
 export default function TicketDetail() {
@@ -16,12 +18,15 @@ export default function TicketDetail() {
     const navigate = useNavigate();
     const {
         chamados,
+        categoriasChamado,
         getClienteNome,
         getTecnicoNome,
         getInteracoes,
         adicionarNota,
         atualizarStatus,
         encerrarChamado,
+        editarChamado,
+        excluirChamado,
         assumirChamado,
         getCategoriaNome,
         getStatusLabel,
@@ -35,6 +40,17 @@ export default function TicketDetail() {
     const [showModal, setShowModal] = useState(false);
     const [solucao, setSolucao] = useState('');
     const [loading, setLoading] = useState(true);
+
+    const [showEditModal, setShowEditModal] = useState(false);
+    const [showDeleteModal, setShowDeleteModal] = useState(false);
+    
+    // For edit form
+    const [editData, setEditData] = useState<{
+        contatoNome: string;
+        titulo: string;
+        descricao: string;
+        categoriaId: string;
+    }>({ contatoNome: '', titulo: '', descricao: '', categoriaId: '' });
 
     const chamado = chamados.find(c => c.id === id);
 
@@ -100,6 +116,44 @@ export default function TicketDetail() {
         }
     };
 
+    const handleOpenEdit = () => {
+        if (!chamado) return;
+        setEditData({
+            contatoNome: chamado.contatoNome || '',
+            titulo: chamado.titulo,
+            descricao: chamado.descricao,
+            categoriaId: chamado.categoriaId,
+        });
+        setShowEditModal(true);
+    };
+
+    const handleSaveEdit = async () => {
+        if (!id || !editData.titulo.trim() || !editData.descricao.trim()) {
+            showNotification('Título e Descrição são obrigatórios.', 'warning');
+            return;
+        }
+        try {
+            await editarChamado(id, editData);
+            setShowEditModal(false);
+            showNotification('Chamado atualizado com sucesso!', 'success');
+            await loadInteracoes();
+        } catch (error) {
+            showNotification('Erro ao atualizar chamado.', 'error');
+        }
+    };
+
+    const handleDelete = async () => {
+        if (!id) return;
+        try {
+            await excluirChamado(id);
+            setShowDeleteModal(false);
+            showNotification('Chamado excluído com sucesso!', 'success');
+            navigate('/');
+        } catch (error) {
+            showNotification('Erro ao excluir chamado.', 'error');
+        }
+    };
+
     if (!chamado) {
         return (
             <div className="empty-state">
@@ -137,7 +191,22 @@ export default function TicketDetail() {
                         </span>
                     </div>
                 </div>
-                <div className="ticket-actions">
+                <div className="ticket-actions" style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                    <button
+                        className="btn btn-secondary btn-sm"
+                        onClick={handleOpenEdit}
+                        title="Editar"
+                    >
+                        <Edit size={14} /> Editar
+                    </button>
+                    <button
+                        className="btn btn-danger btn-sm"
+                        onClick={() => setShowDeleteModal(true)}
+                        title="Excluir"
+                    >
+                        <Trash2 size={14} /> Excluir
+                    </button>
+
                     {chamado.status !== 'fechado' && (
                         <>
                             {chamado.status === 'aberto' && !chamado.tecnicoId && (
@@ -314,6 +383,98 @@ export default function TicketDetail() {
                                 disabled={!solucao.trim()}
                             >
                                 <CheckCircle2 size={16} /> Confirmar Encerramento
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Modal Editar */}
+            {showEditModal && (
+                <div className="modal-overlay" onClick={() => setShowEditModal(false)}>
+                    <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+                        <div className="modal-header">
+                            <h2>Editar Chamado</h2>
+                            <button className="btn-ghost" onClick={() => setShowEditModal(false)}>
+                                <X size={20} />
+                            </button>
+                        </div>
+                        <div className="modal-body" style={{ maxHeight: '70vh', overflowY: 'auto' }}>
+                            <div className="form-group">
+                                <label>Solicitante</label>
+                                <input
+                                    type="text"
+                                    value={editData.contatoNome}
+                                    onChange={(e) => setEditData({...editData, contatoNome: e.target.value})}
+                                    placeholder="Nome do solicitante"
+                                />
+                            </div>
+                            <div className="form-group">
+                                <label>Título *</label>
+                                <input
+                                    type="text"
+                                    value={editData.titulo}
+                                    onChange={(e) => setEditData({...editData, titulo: e.target.value})}
+                                />
+                            </div>
+                            <div className="form-group">
+                                <label>Descrição *</label>
+                                <textarea
+                                    value={editData.descricao}
+                                    onChange={(e) => setEditData({...editData, descricao: e.target.value})}
+                                    style={{ minHeight: 120 }}
+                                />
+                            </div>
+                            <div className="form-group">
+                                <label>Tipo de Chamado</label>
+                                <select
+                                    value={editData.categoriaId}
+                                    onChange={(e) => setEditData({...editData, categoriaId: e.target.value})}
+                                >
+                                    {categoriasChamado.filter(c => c.ativo !== false).map(c => (
+                                        <option key={c.id} value={c.id}>{c.nome}</option>
+                                    ))}
+                                </select>
+                            </div>
+                        </div>
+                        <div className="modal-footer">
+                            <button className="btn btn-secondary" onClick={() => setShowEditModal(false)}>
+                                Cancelar
+                            </button>
+                            <button
+                                className="btn btn-primary"
+                                onClick={handleSaveEdit}
+                                disabled={!editData.titulo.trim() || !editData.descricao.trim()}
+                            >
+                                Salvar Alterações
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Modal Excluir */}
+            {showDeleteModal && (
+                <div className="modal-overlay" onClick={() => setShowDeleteModal(false)}>
+                    <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+                        <div className="modal-header">
+                            <h2>Excluir Chamado</h2>
+                            <button className="btn-ghost" onClick={() => setShowDeleteModal(false)}>
+                                <X size={20} />
+                            </button>
+                        </div>
+                        <div className="modal-body">
+                            <p>Tem certeza que deseja excluir permanentemente o chamado <strong>{chamado.titulo}</strong>?</p>
+                            <p style={{ color: 'var(--danger)', fontSize: 14, marginTop: 8 }}>
+                                ⚠️ Esta ação não poderá ser desfeita e todo o histórico será perdido.
+                            </p>
+                        </div>
+                        <div className="modal-footer">
+                            <button className="btn btn-secondary" onClick={() => setShowDeleteModal(false)}>
+                                Cancelar
+                            </button>
+                            <button className="btn btn-danger" onClick={handleDelete} style={{ background: 'var(--danger)', color: 'white', border: 'none' }}>
+                                Sim, Excluir
                             </button>
                         </div>
                     </div>

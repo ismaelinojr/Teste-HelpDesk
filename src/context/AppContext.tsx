@@ -37,6 +37,8 @@ interface AppContextType extends AppState {
     assumirChamado: (chamadoId: string) => Promise<void>;
     atualizarStatus: (chamadoId: string, status: StatusChamado) => Promise<void>;
     encerrarChamado: (chamadoId: string, solucao: string) => Promise<void>;
+    editarChamado: (chamadoId: string, data: Partial<Chamado>) => Promise<void>;
+    excluirChamado: (chamadoId: string) => Promise<void>;
     adicionarNota: (chamadoId: string, mensagem: string) => Promise<Interacao>;
     getInteracoes: (chamadoId: string) => Promise<Interacao[]>;
     criarChamado: (data: { clienteId: string; contatoNome?: string; categoriaId: string; titulo: string; descricao: string; prioridade: string }) => Promise<void>;
@@ -390,6 +392,32 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         await ticketService.addInteracao(chamadoId, state.currentUser.id, `Chamado encerrado. Solução: ${solucao}`);
         await refreshChamados();
     }, [state.currentUser, refreshChamados]);
+
+    const editarChamado = useCallback(async (chamadoId: string, data: Partial<Chamado>) => {
+        if (!state.currentUser) throw new Error('Usuário não logado');
+        await ticketService.updateTicket(chamadoId, data);
+        const camposEditados: string[] = [];
+        if ('contatoNome' in data) camposEditados.push('Solicitante');
+        if ('titulo' in data) camposEditados.push('Título');
+        if ('descricao' in data) camposEditados.push('Descrição');
+        if ('categoriaId' in data) camposEditados.push('Tipo');
+        if (camposEditados.length > 0) {
+            await ticketService.addInteracao(
+                chamadoId, 
+                state.currentUser.id, 
+                `Chamado editado. Campos alterados: ${camposEditados.join(', ')}.`
+            );
+        }
+        await refreshChamados();
+    }, [state.currentUser, refreshChamados]);
+
+    const excluirChamado = useCallback(async (chamadoId: string) => {
+        await ticketService.deleteTicket(chamadoId);
+        setState(prev => ({
+            ...prev,
+            chamados: prev.chamados.filter(c => c.id !== chamadoId)
+        }));
+    }, []);
 
     const adicionarNota = useCallback(async (chamadoId: string, mensagem: string) => {
         if (!state.currentUser) throw new Error('Usuário não autenticado');
@@ -856,6 +884,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             assumirChamado,
             atualizarStatus,
             encerrarChamado,
+            editarChamado,
+            excluirChamado,
             adicionarNota,
             getInteracoes,
             criarChamado,
