@@ -769,7 +769,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             const zombieDetected = isSystemZombie();
             if (zombieDetected !== state.isZombie) {
                 console.warn(`[AppContext] Mudança no estado Zumbi: ${zombieDetected}`);
-                setState(prev => ({ ...prev, isZombie: zombieDetected }));
+                setState(prev => ({ 
+                    ...prev, 
+                    isZombie: zombieDetected,
+                    ...(zombieDetected ? { isConnectionStable: false } : {}) 
+                }));
                 
                 if (zombieDetected) {
                     showNotification('Detectamos instabilidade persistente na conexão. Algumas funções podem estar suspensas.', 'error');
@@ -865,8 +869,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
                         console.warn('[AppContext] Sessão expirada, realizando logout...');
                         logout();
                     } else if (session === undefined) {
-                        // Falha na verificação leve — não alarmar, apenas logar
-                        console.log('[AppContext] Verificação leve falhou, aguardando próximo ciclo ou ação do usuário.');
+                        // Falha na verificação leve — rodar processo ativo de reconexão visualmente
+                        console.log('[AppContext] Verificação leve falhou, iniciando processo de reconexão visual...');
+                        await loadData({ fromVisibility: true });
                     } else {
                         console.log('[AppContext] Sessão validada com sucesso.');
                     }

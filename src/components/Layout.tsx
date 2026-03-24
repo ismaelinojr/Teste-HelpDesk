@@ -35,7 +35,7 @@ function getPageTitle(pathname: string): string {
 
 export default function Layout() {
     const [sidebarOpen, setSidebarOpen] = useState(false);
-    const { currentUser, logout, isOnline, isConnectionStable, isReconnecting, reconnect } = useApp();
+    const { currentUser, logout, isOnline, isConnectionStable, isReconnecting, reconnect, isZombie } = useApp();
     const location = useLocation();
 
     if (!currentUser) return null;
@@ -131,7 +131,7 @@ export default function Layout() {
                             <Loader2 size={14} className="animate-spin-badge" />
                             <span>Reconectando...</span>
                         </div>
-                    ) : !isConnectionStable ? (
+                    ) : (!isConnectionStable || isZombie) ? (
                         <button 
                             className="connection-badge unstable clickable" 
                             onClick={() => {
